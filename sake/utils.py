@@ -2,6 +2,9 @@ import jax
 import jax.numpy as jnp
 from flax import linen as nn
 
+def coloring(x, mean, std):
+    return std * x + mean
+
 class ExpNormalSmearing(nn.Module):
     cutoff_lower: float = 0.0
     cutoff_upper: float = 5.0

@@ -40,11 +40,11 @@ class DenseSAKELayer(nn.Module):
     out_features : int
     hidden_features : int
     activation : Callable = jax.nn.silu
-    n_coefficients : int = 32
     n_heads : int = 4
 
     def setup(self):
         self.edge_model = ContinuousFilterConvolutionWithConcatenation(self.hidden_features)
+        self.n_coefficients = self.n_heads * self.hidden_features
 
         self.node_mlp = nn.Sequential(
             [
