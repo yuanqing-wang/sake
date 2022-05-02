@@ -172,7 +172,7 @@ class DenseSAKELayer(nn.Module):
 
     def __call__(
             self,
-            h,s
+            h,
             x,
             v=None,
             mask=None,
