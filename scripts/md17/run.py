@@ -38,11 +38,12 @@ def run(data):
     coloring = partial(coloring, mean=e_tr.mean(), std=e_tr.std())
     e_tr_mean = e_tr.mean().item()
 
-    model = sake.models.DenseSAKEModel(
+    model = DenseSAKEModel(
         hidden_features=64,
         out_features=1,
         depth=8,
     )
+
 
     scheduler = optax.warmup_cosine_decay_schedule(
         init_value=1e-6,
@@ -109,6 +110,17 @@ def run(data):
         return params, opt_state, key
 
     from functools import partial
+
+    @partial(jax.jit, static_argnums=(6,))
+    def many_epochs(params, opt_state, x_tr, e_tr, f_tr, key, n=10):
+        def loop_body(idx, state):
+            params, opt_state, key = state
+            params, opt_state, key = epoch(params, opt_state, x_tr, e_tr, f_tr, key)
+            state = params, opt_state, key
+            return state
+        params, opt_state, key = jax.lax.fori_loop(0, n, loop_body, (params, opt_state, key))
+        return params, opt_state, key
+
 
     key = jax.random.PRNGKey(2666)
     i_tr = jnp.repeat(i, batch_size, 0)
