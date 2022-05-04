@@ -33,7 +33,7 @@ def run(data):
 
     n_batches = int(n_tr / batch_size)
 
-    # from sake.utils import coloring
+    from sake.utils import coloring
     from functools import partial
     coloring = partial(coloring, mean=e_tr.mean(), std=e_tr.std())
     e_tr_mean = e_tr.mean().item()
