@@ -38,24 +38,10 @@ def run(data):
     coloring = partial(coloring, mean=e_tr.mean(), std=e_tr.std())
     e_tr_mean = e_tr.mean().item()
 
-    model = DenseSAKEModel(
+    model = sake.models.DenseSAKEModel(
         hidden_features=64,
         out_features=1,
         depth=8,
-    )
-
-
-    scheduler = optax.warmup_cosine_decay_schedule(
-        init_value=1e-6,
-        peak_value=1e-3,
-        warmup_steps=500 * n_batches,
-        decay_steps=4500 * n_batches,
-    )
-
-    optimizer = optax.chain(
-        optax.additive_weight_decay(1e-12),
-        optax.clip(1.0),
-        optax.adam(learning_rate=scheduler),
     )
 
     @jax.jit
@@ -80,16 +66,16 @@ def run(data):
         return f_loss + e_loss * 0.001
 
     @jax.jit
-    def step(params, opt_state, x, e, f):
+    def step(state, x, e, f):
+        params = state.params
         grads = jax.grad(loss_fn)(params, x, e, f)
-        updates, opt_state = optimizer.update(grads, opt_state, params)
-        params = optax.apply_updates(params, updates)
-        return params, opt_state
+        state = state.apply_gradients(grads=grads)
+        return state
 
     @jax.jit
-    def epoch(params, opt_state, x_tr, e_tr, f_tr, key):
-        key, subkey = jax.random.split(key)
-        idxs = jax.random.permutation(subkey, jnp.arange(x_tr.shape[0]))
+    def epoch(state, x_tr, e_tr, f_tr):
+        key = jax.random.PRNGKey(state.step)
+        idxs = jax.random.permutation(key, jnp.arange(x_tr.shape[0]))
         x_tr, e_tr, f_tr = x_tr[idxs], e_tr[idxs], f_tr[idxs]
 
         x_tr = x_tr.reshape(n_batches, batch_size, x_tr.shape[-2], x_tr.shape[-1])
@@ -97,50 +83,52 @@ def run(data):
         f_tr = f_tr.reshape(n_batches, batch_size, f_tr.shape[-2], f_tr.shape[-1])
 
         def loop_body(idx_batch, state):
-            params, opt_state = state
             x = x_tr[idx_batch]
             e = e_tr[idx_batch]
             f = f_tr[idx_batch]
-            params, opt_state = step(params, opt_state, x, e, f)
-            state = params, opt_state
+            state = step(state, x, e, f)
             return state
 
-        params, opt_state = jax.lax.fori_loop(0, n_batches, loop_body, (params, opt_state))
-
-        return params, opt_state, key
+        state = jax.lax.fori_loop(0, n_batches, loop_body, state)
+        return state
 
     from functools import partial
 
     @partial(jax.jit, static_argnums=(6,))
-    def many_epochs(params, opt_state, x_tr, e_tr, f_tr, key, n=10):
+    def many_epochs(state, x_tr, e_tr, f_tr, n=10):
         def loop_body(idx, state):
-            params, opt_state, key = state
-            params, opt_state, key = epoch(params, opt_state, x_tr, e_tr, f_tr, key)
-            state = params, opt_state, key
+            state = epoch(state, x_tr, e_tr, f_tr)
             return state
-        params, opt_state, key = jax.lax.fori_loop(0, n, loop_body, (params, opt_state, key))
-        return params, opt_state, key
-
+        state = jax.lax.fori_loop(0, n, loop_body, state)
+        return state
 
     key = jax.random.PRNGKey(2666)
     i_tr = jnp.repeat(i, batch_size, 0)
     x0 = x_tr[:batch_size]
-    params = model.init(jax.random.PRNGKey(2666), i_tr, x0)
-    opt_state = optimizer.init(params)
+    params = model.init(key, i_tr, x0)
+    scheduler = optax.warmup_cosine_decay_schedule(
+        init_value=1e-6,
+        peak_value=1e-3,
+        warmup_steps=500 * n_batches,
+        decay_steps=4500 * n_batches,
+    )
+
+    optimizer = optax.chain(
+        optax.additive_weight_decay(1e-12),
+        optax.clip(1.0),
+        optax.adam(learning_rate=scheduler),
+    )
+
+    from flax.training.train_state import TrainState
+    from flax.training.checkpoints import save_checkpoint
+    state = TrainState.create(
+        apply_fn=model.apply, params=params, tx=optimizer,
+    )
+
     for idx_batch in range(500):
         import time
-        time0 = time.time()
-        params, opt_state, key = many_epochs(params, opt_state, x_tr, e_tr, f_tr, key)
-        time1 = time.time()
-        if idx_batch % 10 == 0:
-            e_pred_vl = get_e_pred(params, x_vl[:100])
-            f_pred_vl = get_f_pred(params, x_vl[:100])
-            f1_e = jnp.abs(e_pred_vl - e_vl[:100]).mean()
-            f1_f = jnp.abs(f_pred_vl - f_vl[:100]).mean()
-            print("------------")
-            print(idx_batch, time1 - time0)
-            print(f1_e, f1_f)
-
+        state = many_epochs(state, x_tr, e_tr, f_tr)
+        save_checkpoint(data, target=state, step=idx_batch)
 
 if __name__ == "__main__":
     run("malonaldehyde")
