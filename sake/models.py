@@ -30,10 +30,10 @@ class DenseSAKEModel(nn.Module):
                 ),
             )
 
-    def __call__(self, h, x, v=None):
+    def __call__(self, h, x, v=None, mask=None):
         h = self.embedding_in(h)
         for idx in range(self.depth):
             layer = getattr(self, "d%s" % idx)
-            h, x, v = layer(h, x, v)
+            h, x, v = layer(h, x, v, mask=mask)
         h = self.embedding_out(h)
         return h, x, v
