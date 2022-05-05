@@ -1,5 +1,6 @@
 import jax
 import jax.numpy as jnp
+import numpy as onp
 from flax import linen as nn
 
 def coloring(x, mean, std):
@@ -44,3 +45,27 @@ class ExpNormalSmearing(nn.Module):
             -self.betas
             * (jnp.exp(self.alpha * (-dist + self.cutoff_lower)) - self.means) ** 2
         )
+
+@jax.jit
+def mae(x, y):
+    return jnp.abs(x - y).mean()
+
+@jax.jit
+def mae_with_replacement(x, y, seed=0):
+    key = jax.random.PRNGKey(seed)
+    idxs = jax.random.choice(
+        key, x.shape[0], shape=(x.shape[0],), replace=True,
+    )
+    x = x[idxs]
+    y = y[idxs]
+    return mae(x, y)
+
+def bootstrap_mae(x, y, n_samples=10, ci=0.95):
+    original = jnp.abs(x - y).mean().item()
+    results = []
+    for idx in range(n_samples):
+        result = mae_with_replacement(x, y, idx).item()
+        results.append(result)
+    low = onp.percentile(results, 100.0 * 0.5 * (1 - ci))
+    high = onp.percentile(results, (1 - ((1 - ci) * 0.5)) * 100.0)
+    return original, low, high

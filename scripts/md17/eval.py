@@ -58,10 +58,14 @@ def run(data_name):
     get_f_pred = jax.jit(lambda params, x: jax.grad(get_e_pred_sum, argnums=(1,))(params, x)[0])
 
     from flax.training.checkpoints import restore_checkpoint
-    state = restore_checkpoint(data_name)
-    params = state.params
-    e_pred = get_e_pred(params, x_vl)
-    f_pred = get_f_pred(params, x_vl)
+    state = restore_checkpoint(data_name, None)
+    params = state['params']
+
+    e_vl_hat = get_e_pred(params, x_vl)
+    f_vl_hat = get_f_pred(params, x_vl)
+
+    print(sake.utils.bootstrap_mae(f_vl_hat, f_vl))
+    # print(sake.utils.bootstrap_mae(f_vl_hat, f_vl))
 
 if __name__ == "__main__":
     run("malonaldehyde")
