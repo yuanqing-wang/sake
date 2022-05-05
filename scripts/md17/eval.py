@@ -71,7 +71,6 @@ def run(data_name):
     print("validation", sake.utils.bootstrap_mae(f_vl_hat, f_vl), sake.utils.bootstrap_mae(e_vl_hat, e_vl))
     print("test", sake.utils.bootstrap_mae(f_te_hat, f_te), sake.utils.bootstrap_mae(e_te_hat, e_te))
 
-
-
 if __name__ == "__main__":
-    run("malonaldehyde")
+    import sys
+    run(sys.argv[1])
