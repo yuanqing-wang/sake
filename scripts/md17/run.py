@@ -127,7 +127,7 @@ def run(data_name):
     for idx_batch in range(500):
         import time
         state = many_epochs(state, x_tr, e_tr, f_tr)
-        save_checkpoint(data, target=state, step=idx_batch)
+        save_checkpoint(data_name, target=state, step=idx_batch)
 
 if __name__ == "__main__":
     run("malonaldehyde")
