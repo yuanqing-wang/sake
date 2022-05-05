@@ -57,7 +57,7 @@ def run(data_name):
     get_f_pred = jax.jit(lambda params, x: jax.grad(get_e_pred_sum, argnums=(1,))(params, x)[0])
 
     from flax.training.checkpoints import restore_checkpoint
-    state = restore_checkpoint(data_name, None)
+    state = restore_checkpoint("_" + data_name, None)
     params = state['params']
 
     _get_e_pred = lambda x: get_e_pred(params=params, x=x)
