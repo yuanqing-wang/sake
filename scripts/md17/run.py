@@ -4,9 +4,8 @@ import optax
 import numpy as onp
 import sake
 
-def run(data):
-    data = "malonaldehyde"
-    data = onp.load("%s_dft.npz" % data)
+def run(data_name):
+    data = onp.load("%s_dft.npz" % data_name)
     onp.random.seed(2666)
     idxs = onp.random.permutation(len(data['R']))
 
