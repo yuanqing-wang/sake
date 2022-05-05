@@ -61,11 +61,13 @@ def run(data_name):
     state = restore_checkpoint(data_name, None)
     params = state['params']
 
-    e_vl_hat = get_e_pred(params, x_vl)
-    f_vl_hat = get_f_pred(params, x_vl)
+    e_te_hat = get_e_pred(params, x_te)
+    f_te_hat = get_f_pred(params, x_te)
 
-    print(sake.utils.bootstrap_mae(f_vl_hat, f_vl))
-    # print(sake.utils.bootstrap_mae(f_vl_hat, f_vl))
+    print(sake.utils.bootstrap_mae(f_te_hat, f_te))
+    print(sake.utils.bootstrap_mae(f_te_hat, f_te))
+
+
 
 if __name__ == "__main__":
     run("malonaldehyde")
