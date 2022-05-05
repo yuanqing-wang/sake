@@ -13,8 +13,7 @@ def run(data_name):
     e = jnp.array(data['E'][idxs])
     i = jnp.array(data['z'])
     f = jnp.array(data['F'][idxs])
-
-    i = jnp.expand_dims(jax.nn.one_hot(i, i.max()), 0)
+    i = jax.nn.one_hot(i, i.max())
 
     batch_size = 4
     n_tr = n_vl = 1000
@@ -45,7 +44,7 @@ def run(data_name):
 
     @jax.jit
     def get_e_pred(params, x):
-        i_tr = jnp.repeat(i, x.shape[0], 0)
+        i_tr = jnp.broadcast_to(i, (*x.shape[:-1], i.shape[-1]))
         e_pred, _, __ = model.apply(params, i_tr, x)
         e_pred = e_pred.sum(axis=1)
         e_pred = coloring(e_pred)
@@ -61,11 +60,16 @@ def run(data_name):
     state = restore_checkpoint(data_name, None)
     params = state['params']
 
-    e_te_hat = get_e_pred(params, x_te)
-    f_te_hat = get_f_pred(params, x_te)
+    _get_e_pred = lambda x: get_e_pred(params=params, x=x)
+    _get_f_pred = lambda x: get_f_pred(params=params, x=x)
 
-    print(sake.utils.bootstrap_mae(f_te_hat, f_te))
-    print(sake.utils.bootstrap_mae(f_te_hat, f_te))
+    e_vl_hat = jax.lax.map(_get_e_pred, x_vl)
+    f_vl_hat = jax.lax.map(_get_f_pred, x_vl)
+    e_te_hat = jax.lax.map(_get_e_pred, x_te)
+    f_te_hat = jax.lax.map(_get_f_pred, x_te)
+
+    print("validation", sake.utils.bootstrap_mae(f_vl_hat, f_vl), sake.utils.bootstrap_mae(e_vl_hat, e_vl))
+    print("test", sake.utils.bootstrap_mae(f_te_hat, f_te), sake.utils.bootstrap_mae(e_te_hat, e_te))
 
 
 

@@ -47,14 +47,8 @@ class ExpNormalSmearing(nn.Module):
         )
 
 @jax.jit
-def _mae(x, y):
-    return jnp.abs(x - y).mean()
-
-@jax.jit
 def mae(x, y):
-    z = jnp.stack([x, y], axis=1)
-    row_mae = lambda z: _mae(z[0], z[1])
-    return jax.lax.map(row_mae, z).mean()
+    return jnp.abs(x - y).mean()
 
 @jax.jit
 def mae_with_replacement(x, y, seed=0):
