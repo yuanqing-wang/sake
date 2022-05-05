@@ -3,6 +3,7 @@ import jax.numpy as jnp
 import optax
 import numpy as onp
 import sake
+import tqdm
 
 def run(data_name):
     data = onp.load("%s_dft.npz" % data_name)
@@ -101,8 +102,8 @@ def run(data_name):
         return state
 
     key = jax.random.PRNGKey(2666)
-    i_tr = jnp.repeat(i, batch_size, 0)
     x0 = x_tr[:batch_size]
+    i_tr = jnp.broadcast_to(i, (*x0.shape[:-1], i.shape[-1]))
     params = model.init(key, i_tr, x0)
     scheduler = optax.warmup_cosine_decay_schedule(
         init_value=1e-6,
@@ -123,10 +124,11 @@ def run(data_name):
         apply_fn=model.apply, params=params, tx=optimizer,
     )
 
-    for idx_batch in range(500):
+    for idx_batch in tqdm.tqdm(range(500)):
         import time
         state = many_epochs(state, x_tr, e_tr, f_tr)
-        save_checkpoint(data_name, target=state, step=idx_batch)
+        save_checkpoint("_" + data_name, target=state, step=idx_batch)
 
 if __name__ == "__main__":
-    run("malonaldehyde")
+    import sys
+    run(sys.argv[1])
