@@ -68,6 +68,9 @@ def run(data_name):
     e_te_hat = jax.lax.map(_get_e_pred, x_te)
     f_te_hat = jax.lax.map(_get_f_pred, x_te)
 
+    print(e_vl_hat[0], e_vl[0])
+    fuck
+
     print("validation", sake.utils.bootstrap_mae(f_vl_hat, f_vl), sake.utils.bootstrap_mae(e_vl_hat, e_vl))
     print("test", sake.utils.bootstrap_mae(f_te_hat, f_te), sake.utils.bootstrap_mae(e_te_hat, e_te))
 
