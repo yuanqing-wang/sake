@@ -47,7 +47,7 @@ def run(data_name):
     def get_e_pred(params, x):
         i_tr = jnp.broadcast_to(i, (*x.shape[:-1], i.shape[-1]))
         e_pred, _, __ = model.apply(params, i_tr, x)
-        e_pred = e_pred.sum(axis=1)
+        e_pred = e_pred.sum(axis=-2)
         e_pred = coloring(e_pred)
         return e_pred
 
