@@ -24,10 +24,10 @@ def run(target):
         for _split in ["tr", "vl", "te"]:
             locals()["%s_%s" % (_var, _split)] = jnp.array(locals()["%s_%s" % (_var, _split)])
 
-    
+
     i_tr, i_vl, i_te = jax.nn.one_hot(i_tr, i_tr.max()), jax.nn.one_hot(i_vl, i_vl.max()), jax.nn.one_hot(i_te, i_te.max())
     m_tr, m_vl, m_te = make_edge_mask(m_tr), make_edge_mask(m_vl), make_edge_mask(m_te)
-    
+
     BATCH_SIZE = 128
     N_BATCHES = len(i_tr) // BATCH_SIZE
 
@@ -109,8 +109,6 @@ def run(target):
     m0 = m_tr[:BATCH_SIZE]
     y0 = y_tr[:BATCH_SIZE]
 
-    print(m_tr.shape)
-    print(m0.shape)
     params = model.init(key, i0, x0, m0)
     scheduler = optax.warmup_cosine_decay_schedule(
         init_value=1e-6,
