@@ -1,6 +1,7 @@
 import jax
 import jax.numpy as jnp
 import optax
+from flax import linen as nn
 import numpy as onp
 import sake
 import tqdm
@@ -23,30 +24,49 @@ def run(target):
         for _split in ["tr", "vl", "te"]:
             locals()["%s_%s" % (_var, _split)] = jnp.array(locals()["%s_%s" % (_var, _split)])
 
+    
+    i_tr, i_vl, i_te = jax.nn.one_hot(i_tr, i_tr.max()), jax.nn.one_hot(i_vl, i_vl.max()), jax.nn.one_hot(i_te, i_te.max())
     m_tr, m_vl, m_te = make_edge_mask(m_tr), make_edge_mask(m_vl), make_edge_mask(m_te)
-
+    
     BATCH_SIZE = 128
-    N_BATCHES = len(i_tr) // batch_size
+    N_BATCHES = len(i_tr) // BATCH_SIZE
 
     from sake.utils import coloring
     from functools import partial
     coloring = partial(coloring, mean=y_tr.mean(), std=y_tr.std())
 
-    model = sake.models.DenseSAKEModel(
-        hidden_features=64,
-        out_features=1,
-        depth=8,
-    )
+    class Model(nn.Module):
+        def setup(self):
+            self.model = sake.models.DenseSAKEModel(
+                hidden_features=64,
+                out_features=64,
+                depth=8,
+            )
+
+            self.mlp = nn.Sequential(
+                [
+                    nn.Dense(64),
+                    nn.silu,
+                    nn.Dense(1),
+                ],
+            )
+
+        def __call__(self, i, x, m):
+            y, _, __ = self.model(i, x, mask=m)
+            y = y * sum_mask(m)
+            y = y.sum(-2)
+            y = self.mlp(y)
+            return y
+
+    model = Model()
 
     def get_y_hat(params, i, x, m):
-        y_hat = model.apply(params, i, x, mask=m)
+        y_hat = model.apply(params, i, x, m=m)
         y_hat = coloring(y_hat)
-        y_hat = y_hat * sum_mask(m)
-        y_hat = y_hat.sum(-2)
         return y_hat
 
     def loss_fn(params, i, x, m, y):
-        y_hat = get_y_hat(params, i, x, mask=m)
+        y_hat = get_y_hat(params, i, x, m)
         loss = ((y - y_hat) ** 2).mean()
         return loss
 
@@ -59,9 +79,9 @@ def run(target):
     def epoch(state, i_tr, x_tr, m_tr, y_tr):
         key = jax.random.PRNGKey(state.step)
         idxs = jax.random.permutation(key, jnp.arange(BATCH_SIZE * N_BATCHES))
-        i_tr = i_tr[:BATCH_SIZE * N_BATCHES].reshape(N_BATCHES, BATCH_SIZE, *i_tr.shape[2:])
-        x_tr = x_tr[:BATCH_SIZE * N_BATCHES].reshape(N_BATCHES, BATCH_SIZE, *x_tr.shape[2:])
-        m_tr = x_tr[:BATCH_SIZE * N_BATCHES].reshape(N_BATCHES, BATCH_SIZE, *m_tr.shape[2:])
+        i_tr = i_tr[:BATCH_SIZE * N_BATCHES].reshape(N_BATCHES, BATCH_SIZE, *i_tr.shape[1:])
+        x_tr = x_tr[:BATCH_SIZE * N_BATCHES].reshape(N_BATCHES, BATCH_SIZE, *x_tr.shape[1:])
+        m_tr = m_tr[:BATCH_SIZE * N_BATCHES].reshape(N_BATCHES, BATCH_SIZE, *m_tr.shape[1:])
         y_tr = y_tr[:BATCH_SIZE * N_BATCHES].reshape(N_BATCHES, BATCH_SIZE, 1)
 
         def loop_body(idx_batch, state):
@@ -77,7 +97,7 @@ def run(target):
 
     @partial(jax.jit, static_argnums=(5))
     def many_epochs(state, i_tr, x_tr, m_tr, y_tr, n=10):
-        def loop_body(state, i_tr, x_tr, m_tr, y_tr):
+        def loop_body(idx_batch, state):
             state = epoch(state, i_tr, x_tr, m_tr, y_tr)
             return state
         state = jax.lax.fori_loop(0, n, loop_body, state)
@@ -88,12 +108,15 @@ def run(target):
     x0 = x_tr[:BATCH_SIZE]
     m0 = m_tr[:BATCH_SIZE]
     y0 = y_tr[:BATCH_SIZE]
-    params = model.init(key, i0, x0, m0, y0)
+
+    print(m_tr.shape)
+    print(m0.shape)
+    params = model.init(key, i0, x0, m0)
     scheduler = optax.warmup_cosine_decay_schedule(
         init_value=1e-6,
         peak_value=1e-3,
-        warmup_steps=500 * n_batches,
-        decay_steps=4500 * n_batches,
+        warmup_steps=50 * N_BATCHES,
+        decay_steps=450 * N_BATCHES,
     )
 
     optimizer = optax.chain(
@@ -108,7 +131,12 @@ def run(target):
         apply_fn=model.apply, params=params, tx=optimizer,
     )
 
-    for idx_batch in tqdm.tqdm(range(500)):
+    for idx_batch in tqdm.tqdm(range(50)):
         import time
         state = many_epochs(state, i_tr, x_tr, m_tr, y_tr)
         save_checkpoint("_" + target, target=state, step=idx_batch)
+
+
+if __name__ == "__main__":
+    import sys
+    run(sys.argv[1])
