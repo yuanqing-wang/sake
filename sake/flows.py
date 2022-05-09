@@ -4,6 +4,7 @@ from jax.experimental.ode import odeint
 from flax import linen as nn
 from .models import DenseSAKEModel
 from functools import partial
+import math
 
 T = jnp.array((0.0, 1.0))
 
@@ -13,10 +14,10 @@ class CenteredGaussian(object):
         N = value.shape[-2]
         D = value.shape[-1]
         degrees_of_freedom = (N-1) * D
-        r2 = jnp.reshape(value ** 2, (*value.shape[:-2], -1)).sum(-1) / self.scale ** 2
+        r2 = jnp.reshape(value ** 2, (*value.shape[:-2], -1)).sum(-1)
         log_normalizing_constant = -0.5 * degrees_of_freedom * math.log(2*math.pi)
         log_px = -0.5 * r2 + log_normalizing_constant
-        return
+        return log_px
 
     @staticmethod
     def sample(key, shape):
