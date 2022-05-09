@@ -19,13 +19,13 @@ def test_odeflow():
     jacobian = partial(sake.flows.ODEFlow.jacobian, integrate)
     assert jacobian(x).shape == (2, 5, 3, 5, 3)
 
-    trace = partial(sake.flows.ODEFlow.trace, jacobian)
-    assert trace(x).shape == (2,)
+    logdet = partial(sake.flows.ODEFlow.logdet, jacobian)
+    assert logdet(x).shape == (2,)
 
     call = partial(sake.flows.ODEFlow(), model, params)
-    res, trace = call(x)
+    res, logdet = call(x)
     assert res.shape == (2, 5, 3)
-    assert trace.shape == (2, )
+    assert logdet.shape == (2, )
 
 
 

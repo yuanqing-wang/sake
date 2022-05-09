@@ -48,21 +48,21 @@ class ODEFlow(object):
         return _jacobian(x)
 
     @staticmethod
-    def trace(fn, x):
+    def logdet(fn, x):
         res = fn(x)
         degrees_of_freedom = res.shape[-1] * res.shape[-2]
         res_shape = (*res.shape[:-4], degrees_of_freedom, degrees_of_freedom)
         res = jnp.reshape(res, res_shape)
-        trace = jnp.trace(res, axis1=-2, axis2=-1)
-        return trace
+        logdet = jnp.log(jnp.abs(jnp.linalg.det(res)) + 1e-10)
+        return logdet
 
     @staticmethod
     def call(model, params, x):
         dynamics = partial(ODEFlow.dynamics, model, params)
         integrate = partial(ODEFlow.integrate, dynamics)
         jacobian = partial(ODEFlow.jacobian, integrate)
-        trace = partial(ODEFlow.trace, jacobian)
-        return integrate(x), trace(x)
+        logdet = partial(ODEFlow.logdet, jacobian)
+        return integrate(x), logdet(x)
 
     @staticmethod
     def __call__(model, params, x): return ODEFlow.call(model, params, x)
