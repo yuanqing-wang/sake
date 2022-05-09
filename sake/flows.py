@@ -54,7 +54,7 @@ class ODEFlow(object):
         degrees_of_freedom = res.shape[-1] * res.shape[-2]
         res_shape = (*res.shape[:-4], degrees_of_freedom, degrees_of_freedom)
         res = jnp.reshape(res, res_shape)
-        logdet = jnp.log(jnp.abs(jnp.linalg.det(res)) + 1e-10)
+        _, logdet = jnp.linalg.slogdet(res)
         return logdet
 
     @staticmethod
