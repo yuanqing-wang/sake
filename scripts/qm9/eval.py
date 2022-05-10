@@ -69,24 +69,20 @@ def run(target):
     state = restore_checkpoint("_" + target, None)
     params = state['params']
 
-    def _get_y_hat_vl(idx):
-        i = i_vl[idx]
-        x = x_vl[idx]
-        m = m_vl[idx]
+    
+    def _get_y_hat(inputs):
+        x, i = jnp.split(inputs, [3], axis=-1)
+        m = make_edge_mask(i.argmax(-1))
         return get_y_hat(params, i, x, m)
+    
+    inputs = jnp.concatenate([x_vl, i_vl], axis=-1)
+    y_vl_hat = jax.lax.map(_get_y_hat, inputs)
+    print(y_vl_hat)
+    print(sake.utils.mae(y_vl_hat, y_vl))
 
-    def _get_y_hat_te(idx):
-        i = i_te[idx]
-        x = x_te[idx]
-        m = m_te[idx]
-        return get_y_hat(params, i, x, m)
 
-
-    y_vl_hat = jax.lax.map(_get_y_hat_vl, jnp.arange(len(x_vl)))
-    y_te_hat = jax.lax.map(_get_y_hat_te, jnp.arange(len(x_te)))
-
-    print("validation", sake.utils.bootstrap_mae(y_vl_hat, y_vl))
-    print("test", sake.utils.bootstrap_mae(y_te_hat, y_te))
+    # print("validation", sake.utils.bootstrap_mae(y_vl_hat, y_vl))
+    # print("test", sake.utils.bootstrap_mae(y_te_hat, y_te))
 
 if __name__ == "__main__":
     import sys

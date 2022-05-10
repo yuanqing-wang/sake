@@ -134,6 +134,8 @@ def run(target):
         state = many_epochs(state, i_tr, x_tr, m_tr, y_tr)
         save_checkpoint("_" + target, target=state, step=idx_batch)
 
+        print(loss_fn(state.params, i0, x0, m0, y0), flush=True)
+
 
 if __name__ == "__main__":
     import sys
