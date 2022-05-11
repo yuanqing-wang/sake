@@ -135,12 +135,15 @@ class DenseSAKELayer(nn.Module):
         out = h + out
         return out
 
-    def euclidean_attention(self, x_minus_xt_norm):
+    def euclidean_attention(self, x_minus_xt_norm, mask=None):
         # (batch_size, n, n, 1)
         _x_minus_xt_norm = x_minus_xt_norm + 1e5 * jnp.expand_dims(jnp.eye(
             x_minus_xt_norm.shape[-2],
             x_minus_xt_norm.shape[-2],
         ), -1)
+
+        if mask is not None:
+            _x_minus_xt_norm = _x_minus_xt_norm + 1e5 * (1- jnp.expand_dims(mask, -1))
 
         att = jax.nn.softmax(
             -_x_minus_xt_norm * jnp.exp(self.log_gamma),
@@ -148,7 +151,7 @@ class DenseSAKELayer(nn.Module):
         )
         return att
 
-    def semantic_attention(self, h_e_mtx):
+    def semantic_attention(self, h_e_mtx, mask=None):
         # (batch_size, n, n, n_heads)
         att = self.semantic_attention_mlp(h_e_mtx)
 
@@ -158,12 +161,16 @@ class DenseSAKELayer(nn.Module):
             att.shape[-2],
             att.shape[-2],
         ), -1)
+
+        if mask is not None:
+            att = att - 1e5 * (1 - jnp.expand_dims(mask, -1))
+
         att = jax.nn.softmax(att, axis=-2)
         return att
 
-    def combined_attention(self, x_minus_xt_norm, h_e_mtx):
-        euclidean_attention = self.euclidean_attention(x_minus_xt_norm)
-        semantic_attention = self.semantic_attention(h_e_mtx)
+    def combined_attention(self, x_minus_xt_norm, h_e_mtx, mask=None):
+        euclidean_attention = self.euclidean_attention(x_minus_xt_norm, mask=maks)
+        semantic_attention = self.semantic_attention(h_e_mt, mask=mask)
         combined_attention = jax.nn.softmax(euclidean_attention * semantic_attention, axis=-2)
         return euclidean_attention, semantic_attention, combined_attention
 
@@ -185,7 +192,7 @@ class DenseSAKELayer(nn.Module):
 
         h_e_mtx = self.edge_model(h_cat_ht, x_minus_xt_norm)
 
-        euclidean_attention, semantic_attention, combined_attention = self.combined_attention(x_minus_xt_norm, h_e_mtx)
+        euclidean_attention, semantic_attention, combined_attention = self.combined_attention(x_minus_xt_norm, h_e_mtx, mask=mask)
         h_e_att = jnp.expand_dims(h_e_mtx, -1) * jnp.expand_dims(combined_attention, -2)
         h_e_att = jnp.reshape(h_e_att, h_e_att.shape[:-2] + (-1, ))
         h_combinations, delta_v = self.spatial_attention(h_e_att, x_minus_xt, x_minus_xt_norm, combined_attention, mask=mask)
