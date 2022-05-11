@@ -6,6 +6,12 @@ from .utils import ExpNormalSmearing
 from .functional import get_x_minus_xt, get_x_minus_xt_norm, get_h_cat_ht
 from functools import partial
 
+def double_tanh(x):
+    return 2.0 * jnp.tanh(x)
+
+def double_sigmoid(x):
+    return 2.0 * jax.nn.sigmoid(x)
+
 class ContinuousFilterConvolutionWithConcatenation(nn.Module):
     out_features : int
     kernel_features : int = 50
@@ -59,13 +65,8 @@ class DenseSAKELayer(nn.Module):
             [
                 nn.Dense(self.hidden_features),
                 self.activation,
-                nn.Dense(1, use_bias=False,
-                    kernel_init=nn.initializers.variance_scaling(
-                        scale=0.001,
-                        mode="fan_avg",
-                        distribution="uniform",
-                    ),
-                ),
+                nn.Dense(1, use_bias=False),
+                double_sigmoid,
             ],
         )
 
@@ -110,7 +111,7 @@ class DenseSAKELayer(nn.Module):
             combinations = combinations * jnp.expand_dims(jnp.expand_dims(mask, -1), -1)
 
         # (batch_size, n, n, coefficients)
-        combinations_sum = combinations.mean(axis=-3)
+        combinations_sum = double_tanh(combinations.mean(axis=-3))
         combinations_norm = (combinations_sum ** 2).sum(-1)# .pow(0.5)
 
         h_combinations = self.post_norm_mlp(combinations_norm)
@@ -119,7 +120,7 @@ class DenseSAKELayer(nn.Module):
     def aggregate(self, h_e_mtx, mask=None):
         # h_e_mtx = self.mask_self(h_e_mtx)
         if mask is not None:
-            h_e_mtx = h_e_mtx * jnp.unsqueeze(mask, -1)
+            h_e_mtx = h_e_mtx * jnp.expand_dims(mask, -1)
         h_e = h_e_mtx.sum(axis=-2)
         return h_e
 
@@ -189,6 +190,7 @@ class DenseSAKELayer(nn.Module):
         h_e_att = jnp.reshape(h_e_att, h_e_att.shape[:-2] + (-1, ))
         h_combinations, delta_v = self.spatial_attention(h_e_att, x_minus_xt, x_minus_xt_norm, combined_attention, mask=mask)
         delta_v = self.v_mixing(delta_v.swapaxes(-1, -2)).swapaxes(-1, -2).mean(axis=(-2, -3))
+        delta_v = jnp.tanh(delta_v)
 
         # h_e_mtx = (h_e_mtx.unsqueeze(-1) * combined_attention.unsqueeze(-2)).flatten(-2, -1)
         h_e = self.aggregate(h_e_att, mask=mask)
