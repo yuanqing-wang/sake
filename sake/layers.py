@@ -169,8 +169,8 @@ class DenseSAKELayer(nn.Module):
         return att
 
     def combined_attention(self, x_minus_xt_norm, h_e_mtx, mask=None):
-        euclidean_attention = self.euclidean_attention(x_minus_xt_norm, mask=maks)
-        semantic_attention = self.semantic_attention(h_e_mt, mask=mask)
+        euclidean_attention = self.euclidean_attention(x_minus_xt_norm, mask=mask)
+        semantic_attention = self.semantic_attention(h_e_mtx, mask=mask)
         combined_attention = jax.nn.softmax(euclidean_attention * semantic_attention, axis=-2)
         return euclidean_attention, semantic_attention, combined_attention
 
