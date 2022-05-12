@@ -25,7 +25,7 @@ def run(target):
             locals()["%s_%s" % (_var, _split)] = jnp.array(locals()["%s_%s" % (_var, _split)])
 
 
-    i_tr, i_vl, i_te = jax.nn.one_hot(i_tr, i_tr.max()), jax.nn.one_hot(i_vl, i_vl.max()), jax.nn.one_hot(i_te, i_te.max())
+    i_tr, i_vl, i_te = jax.nn.one_hot(i_tr, i_tr.max()+1), jax.nn.one_hot(i_vl, i_tr.max()+1), jax.nn.one_hot(i_te, i_tr.max()+1)
     m_tr, m_vl, m_te = make_edge_mask(m_tr), make_edge_mask(m_vl), make_edge_mask(m_te)
 
     BATCH_SIZE = 128
@@ -34,6 +34,8 @@ def run(target):
     from sake.utils import coloring
     from functools import partial
     coloring = partial(coloring, mean=y_tr.mean(), std=y_tr.std())
+
+    print(y_tr.mean(), y_tr.std())
 
     class Model(nn.Module):
         def setup(self):
@@ -67,7 +69,7 @@ def run(target):
 
     def loss_fn(params, i, x, m, y):
         y_hat = get_y_hat(params, i, x, m)
-        loss = ((y - y_hat) ** 2).mean()
+        loss = jnp.abs(y - y_hat).mean()
         return loss
 
     def step(state, i, x, m, y):
@@ -75,7 +77,15 @@ def run(target):
         grads = jax.grad(loss_fn)(params, i, x, m, y)
         state = state.apply_gradients(grads=grads)
         return state
-
+    
+    @jax.jit
+    def step_with_loss(state, i, x, m, y):
+        params = state.params
+        loss, grads = jax.value_and_grad(loss_fn)(params, i, x, m, y)
+        state = state.apply_gradients(grads=grads)
+        return loss, state
+    
+    @jax.jit
     def epoch(state, i_tr, x_tr, m_tr, y_tr):
         key = jax.random.PRNGKey(state.step)
         idxs = jax.random.permutation(key, jnp.arange(BATCH_SIZE * N_BATCHES))
@@ -86,7 +96,7 @@ def run(target):
 
         def loop_body(idx_batch, state):
             i = i_tr[idx_batch]
-            x = i_tr[idx_batch]
+            x = x_tr[idx_batch]
             m = m_tr[idx_batch]
             y = y_tr[idx_batch]
             state = step(state, i, x, m, y)
@@ -129,13 +139,9 @@ def run(target):
         apply_fn=model.apply, params=params, tx=optimizer,
     )
 
-    for idx_batch in tqdm.tqdm(range(50)):
-        import time
-        state = many_epochs(state, i_tr, x_tr, m_tr, y_tr)
+    for idx_batch in tqdm.tqdm(range(500)):
+        state = epoch(state, i_tr, x_tr, m_tr, y_tr)
         save_checkpoint("_" + target, target=state, step=idx_batch)
-
-        print(loss_fn(state.params, i0, x0, m0, y0), flush=True)
-
 
 if __name__ == "__main__":
     import sys
