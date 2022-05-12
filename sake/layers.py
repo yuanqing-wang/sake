@@ -87,6 +87,7 @@ class DenseSAKELayer(nn.Module):
         )
 
         self.v_mixing = nn.Dense(1, use_bias=False)
+        self.x_mixing = nn.Dense(self.n_coefficients, use_bias=False)
 
         log_gamma = -jnp.log(jnp.linspace(1.0, 5.0, 4))
         self.log_gamma = self.param(
@@ -98,7 +99,7 @@ class DenseSAKELayer(nn.Module):
     def spatial_attention(self, h_e_mtx, x_minus_xt, x_minus_xt_norm, euclidean_attention, mask=None):
         # (batch_size, n, n, n_coefficients)
         # coefficients = self.coefficients_mlp(h_e_mtx)# .unsqueeze(-1)
-        coefficients = h_e_mtx
+        coefficients = self.x_mixing(h_e_mtx)
 
         # (batch_size, n, n, 3)
         # x_minus_xt = x_minus_xt * euclidean_attention.mean(dim=-1, keepdim=True) / (x_minus_xt_norm + 1e-5)
@@ -109,9 +110,11 @@ class DenseSAKELayer(nn.Module):
 
         if mask is not None:
             combinations = combinations * jnp.expand_dims(jnp.expand_dims(mask, -1), -1)
+            combinations_sum = double_tanh(combinations.sum(axis=-3))
+        else:
+            # (batch_size, n, n, coefficients)
+            combinations_sum = double_tanh(combinations.mean(axis=-3))
 
-        # (batch_size, n, n, coefficients)
-        combinations_sum = double_tanh(combinations.mean(axis=-3))
         combinations_norm = (combinations_sum ** 2).sum(-1)# .pow(0.5)
 
         h_combinations = self.post_norm_mlp(combinations_norm)
@@ -196,7 +199,11 @@ class DenseSAKELayer(nn.Module):
         h_e_att = jnp.expand_dims(h_e_mtx, -1) * jnp.expand_dims(combined_attention, -2)
         h_e_att = jnp.reshape(h_e_att, h_e_att.shape[:-2] + (-1, ))
         h_combinations, delta_v = self.spatial_attention(h_e_att, x_minus_xt, x_minus_xt_norm, combined_attention, mask=mask)
-        delta_v = self.v_mixing(delta_v.swapaxes(-1, -2)).swapaxes(-1, -2).mean(axis=(-2, -3))
+        if mask is not None:
+            delta_v = self.v_mixing(delta_v.swapaxes(-1, -2)).swapaxes(-1, -2).mean(axis=(-2, -3))
+        else:
+            delta_v = self.v_mixing(delta_v.swapaxes(-1, -2)).swapaexs(-1, -2).sum(axis=(-2, 3))
+
         delta_v = jnp.tanh(delta_v)
 
         # h_e_mtx = (h_e_mtx.unsqueeze(-1) * combined_attention.unsqueeze(-2)).flatten(-2, -1)
