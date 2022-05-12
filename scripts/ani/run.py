@@ -21,6 +21,39 @@ ELEMENT = {
     "O": 3,
 }
 
+class ANIDataset(object):
+    def __init__(self):
+        self.data = {}
+        self.datasets = [h5py.File("ANI-1_release/ani_gdb_s0%s.h5" % idx) for idx in range(1, 9)]
+
+
+def get_data():
+    data = {}
+    datasets = [h5py.File("ANI-1_release/ani_gdb_s0%s.h5" % idx) for idx in range(1, 9)]
+    for dataset in datasets:
+        dataset_name = next(iter(datasets.keys()))
+        for entry in dataset[dataset_name]:
+            elements = entry['species']
+            elements = [element.decode("UTF-8") for element in elements]
+            offset = sum([ELEMENT_ENERGY[element] for element in elements])
+
+            x = jnp.array(data['coordinates'])
+            y = jnp.array(data['energies']) - offset
+            i = entry['species']
+            i = [_i.decode("UTF-8") for _i in i]
+            i = jnp.array([ELEMENT[_i] for _i in i])
+
+            length = x.shape[0]
+            if length in data:
+                data[length]['i'] = jnp.concatenate([data[length]['i'], i])
+                data[length]['x'] = jnp.concatenate([data[length]['x'], x])
+                data[length]['y'] = jnp.concatenate([data[length]['y'], y])
+            else:
+                data[length]['i'] = i
+                data[length]['x'] = x
+                data[length]['y'] = y
+
+    return data
 
 class ANIDataset(object):
     def __init__(self):
@@ -88,7 +121,7 @@ def run():
     i, x, y = data[idxs_tr[0].item()]
     params = model.init(jax.random.PRNGKey(2666), i, x)
 
-    import optax 
+    import optax
     optimizer = optax.chain(
         optax.additive_weight_decay(1e-12),
         optax.clip(1.0),
@@ -124,7 +157,7 @@ def run():
 
 
 
-    
+
 
 if __name__ == "__main__":
     run()
