@@ -1,8 +1,6 @@
-import torch
 import jax
 import jax.numpy as jnp
 import numpy as onp
-from torch.utils.data import DataLoader, Dataset
 import h5py
 
 DATA_NAMES = [
@@ -27,7 +25,7 @@ ELEMENT = {
 class ANIDataset(object):
     def __init__(self):
         super().__init__()
-        self.datasets = [h5py.File("ani_gdb_s0%s.h5" % idx) for idx in range(1, 9)]
+        self.datasets = [h5py.File("ANI-1_release/ani_gdb_s0%s.h5" % idx) for idx in range(1, 9)]
         self.data_names = ["gdb11_s0%s" % idx for idx in range(1, 9)]
         self.keys = {data_name: list(dataset[data_name].keys()) for dataset, data_name in zip(self.datasets, self.data_names)}
         lengths = onp.array([len(value) for key, value in self.keys.items()])
@@ -117,6 +115,8 @@ def run():
         onp.random.shuffle(idxs_tr)
         for idx_data in idxs_tr:
             i, x, y = data[idx_data.item()]
+            idxs = onp.random.choice(onp.arange(i.shape[0]), 1024)
+            i, x, y = i[idxs], x[idxs], y[idxs]
             loss, state = step(state, i, x, y)
             print(loss)
 
