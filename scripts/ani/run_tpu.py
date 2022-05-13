@@ -4,14 +4,17 @@ import numpy as onp
 import flax
 from functools import partial
 
-BATCH_SIZE = 128
+BATCH_SIZE = 1024
 
 class Collater(object):
-    def __init__(self, ds_tr, batch_size=128, n_device=8):
+    def __init__(self, ds_tr, batch_size=BATCH_SIZE, n_device=8):
         self.ds_tr = ds_tr
         self.pointers = []
         self.batch_size = batch_size
         self.n_device = n_device
+
+    def __len__(self):
+        return len(self.get_pointers())
 
     def _move_to_device(ds_tr):
         for length in ds_tr:
@@ -84,6 +87,14 @@ def run():
     params = model.init(jax.random.PRNGKey(2666), i, x)
 
     import optax
+    n_batches = len(collater)
+    scheduler = optax.warmup_cosine_decay_schedule(
+        init_value=1e-6,
+        peak_value=1e-3,
+        warmup_steps=100 * n_batches,
+        decay_steps=900 * n_batches,
+    )
+
     optimizer = optax.chain(
         optax.additive_weight_decay(1e-5),
         optax.clip(1.0),
