@@ -2,6 +2,7 @@ import jax
 import jax.numpy as jnp
 import numpy as onp
 import flax
+from functools import partial
 
 BATCH_SIZE = 128
 
@@ -84,7 +85,7 @@ def run():
 
     import optax
     optimizer = optax.chain(
-        optax.additive_weight_decay(1e-12),
+        optax.additive_weight_decay(1e-5),
         optax.clip(1.0),
         optax.adam(1e-5),
     )
@@ -111,6 +112,7 @@ def run():
     for idx_batch in tqdm(range(50)):
         for i, x, y in collater:
             loss, state = step(state, i, x, y)
+            print(loss)
         save_checkpoint("_checkpoint", target=state, step=idx_batch)
 
 if __name__ == "__main__":
