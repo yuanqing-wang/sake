@@ -110,10 +110,10 @@ class DenseSAKELayer(nn.Module):
 
         if mask is not None:
             combinations = combinations * jnp.expand_dims(jnp.expand_dims(mask, -1), -1)
-            combinations_sum = double_tanh(combinations.sum(axis=-3))
+            combinations_sum = combinations.sum(axis=-3)
         else:
             # (batch_size, n, n, coefficients)
-            combinations_sum = double_tanh(combinations.mean(axis=-3))
+            combinations_sum = combinations.mean(axis=-3)
 
         combinations_norm = (combinations_sum ** 2).sum(-1)# .pow(0.5)
 
@@ -200,9 +200,9 @@ class DenseSAKELayer(nn.Module):
         h_e_att = jnp.reshape(h_e_att, h_e_att.shape[:-2] + (-1, ))
         h_combinations, delta_v = self.spatial_attention(h_e_att, x_minus_xt, x_minus_xt_norm, combined_attention, mask=mask)
         if mask is not None:
-            delta_v = self.v_mixing(delta_v.swapaxes(-1, -2)).swapaxes(-1, -2).mean(axis=(-2, -3))
+            delta_v = self.v_mixing(delta_v.swapaxes(-1, -2)).swapaxes(-1, -2).sum(axis=(-2, -3))
         else:
-            delta_v = self.v_mixing(delta_v.swapaxes(-1, -2)).swapaexs(-1, -2).sum(axis=(-2, 3))
+            delta_v = self.v_mixing(delta_v.swapaxes(-1, -2)).swapaxes(-1, -2).mean(axis=(-2, -3))
 
         delta_v = jnp.tanh(delta_v)
 
