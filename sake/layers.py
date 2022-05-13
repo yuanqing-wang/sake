@@ -6,9 +6,6 @@ from .utils import ExpNormalSmearing
 from .functional import get_x_minus_xt, get_x_minus_xt_norm, get_h_cat_ht
 from functools import partial
 
-def double_tanh(x):
-    return 2.0 * jnp.tanh(x)
-
 def double_sigmoid(x):
     return 2.0 * jax.nn.sigmoid(x)
 
@@ -89,7 +86,7 @@ class DenseSAKELayer(nn.Module):
         self.v_mixing = nn.Dense(1, use_bias=False)
         self.x_mixing = nn.Dense(self.n_coefficients, use_bias=False)
 
-        log_gamma = -jnp.log(jnp.linspace(1.0, 5.0, 4))
+        log_gamma = -jnp.log(jnp.linspace(1.0, 5.0, self.n_heads))
         self.log_gamma = self.param(
             "log_gamma",
             nn.initializers.constant(log_gamma),
@@ -103,7 +100,7 @@ class DenseSAKELayer(nn.Module):
 
         # (batch_size, n, n, 3)
         # x_minus_xt = x_minus_xt * euclidean_attention.mean(dim=-1, keepdim=True) / (x_minus_xt_norm + 1e-5)
-        x_minus_xt = x_minus_xt / (x_minus_xt_norm + 1e-5) # ** 2
+        x_minus_xt = x_minus_xt / (x_minus_xt_norm + 1e-10) # ** 2
 
         # (batch_size, n, n, coefficients, 3)
         combinations = jnp.expand_dims(x_minus_xt, -2) * jnp.expand_dims(coefficients, -1)
