@@ -113,17 +113,15 @@ def run():
     @partial(jax.pmap, axis_name="batch")
     def step(state, i, x, y):
         params = state.params
-        loss, grads = jax.value_and_grad(get_loss)(params, i, x, y)
-        loss = jax.lax.pmean(loss, "batch")
+        grads = jax.grad(get_loss)(params, i, x, y)
         grads = jax.lax.pmean(grads, "batch")
         state = state.apply_gradients(grads=grads)
-        return loss, state
+        return state
 
     from tqdm import tqdm
-    for idx_batch in tqdm(range(50)):
+    for idx_batch in tqdm(range(1000)):
         for i, x, y in collater:
-            loss, state = step(state, i, x, y)
-            print(loss)
+            state = step(state, i, x, y)
         save_checkpoint("_checkpoint", target=state, step=idx_batch)
 
 if __name__ == "__main__":
