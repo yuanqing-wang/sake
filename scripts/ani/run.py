@@ -1,105 +1,59 @@
 import jax
 import jax.numpy as jnp
 import numpy as onp
-import h5py
 
-DATA_NAMES = [
-    "ani_gdb_s0%s.h5" % idx for idx in range(1, 9)
-]
+BATCH_SIZE = 128
 
-ELEMENT_ENERGY = {
-    "H": -0.500607632585,
-    "C": -37.8302333826,
-    "N": -54.5680045287,
-    "O": -75.0362229210,
-}
+class Collater(object):
+    def __init__(self, ds_tr):
+        self.ds_tr = ds_tr
+        self.pointers = []
 
-ELEMENT = {
-    "H": 0,
-    "C": 1,
-    "N": 2,
-    "O": 3,
-}
+    def _move_to_device(ds_tr):
+        for length in ds_tr:
+            ds_tr[length]['i'] = jnp.array(ds_tr[length]['i'])
+            ds_tr[length]['x'] = jnp.array(ds_tr[length]['x'])
+            ds_tr[length]['y'] = jnp.array(ds_tr[length]['y'])
+        return ds_tr
 
-class ANIDataset(object):
-    def __init__(self):
-        self.data = {}
-        self.datasets = [h5py.File("ANI-1_release/ani_gdb_s0%s.h5" % idx) for idx in range(1, 9)]
+    def get_pointers(self):
+        pointers = []
+        for length in self.ds_tr:
+            n_data = self.ds_tr[length]['x'].shape[0]
+            n_batches = int(n_data / BATCH_SIZE)
+            idxs = onp.random.permutation(n_data)[:n_batches*BATCH_SIZE]
+            idxs = idxs.reshape(n_batches, BATCH_SIZE)
+            for idx in idxs:
+                pointers.append((length, idx))
+        import random
+        random.shuffle(pointers)
+        self.pointers = pointers
+        return pointers 
 
+    def get_from_pointer(self, pointer):
+        length, idxs = pointer
+        return (
+                jax.nn.one_hot(self.ds_tr[length]['i'][idxs], 4), 
+                jnp.array(self.ds_tr[length]['x'][idxs]), 
+                jnp.expand_dims(jnp.array(self.ds_tr[length]['y'][idxs]), -1),
+        )
 
-def get_data():
-    data = {}
-    datasets = [h5py.File("ANI-1_release/ani_gdb_s0%s.h5" % idx) for idx in range(1, 9)]
-    for dataset in datasets:
-        dataset_name = next(iter(datasets.keys()))
-        for entry in dataset[dataset_name]:
-            elements = entry['species']
-            elements = [element.decode("UTF-8") for element in elements]
-            offset = sum([ELEMENT_ENERGY[element] for element in elements])
+    def __iter__(self):
+        self.get_pointers()
+        return self
 
-            x = jnp.array(data['coordinates'])
-            y = jnp.array(data['energies']) - offset
-            i = entry['species']
-            i = [_i.decode("UTF-8") for _i in i]
-            i = jnp.array([ELEMENT[_i] for _i in i])
-
-            length = x.shape[0]
-            if length in data:
-                data[length]['i'] = jnp.concatenate([data[length]['i'], i])
-                data[length]['x'] = jnp.concatenate([data[length]['x'], x])
-                data[length]['y'] = jnp.concatenate([data[length]['y'], y])
-            else:
-                data[length]['i'] = i
-                data[length]['x'] = x
-                data[length]['y'] = y
-
-    return data
-
-class ANIDataset(object):
-    def __init__(self):
-        super().__init__()
-        self.datasets = [h5py.File("ANI-1_release/ani_gdb_s0%s.h5" % idx) for idx in range(1, 9)]
-        self.data_names = ["gdb11_s0%s" % idx for idx in range(1, 9)]
-        self.keys = {data_name: list(dataset[data_name].keys()) for dataset, data_name in zip(self.datasets, self.data_names)}
-        lengths = onp.array([len(value) for key, value in self.keys.items()])
-        self.total_length = sum(lengths)
-        self.length_bin = onp.cumsum(lengths)
-
-    def __len__(self): return self.total_length
-
-    def __getitem__(self, idx):
-        assert isinstance(idx, int), "Can only index by int."
-        previous_idx = 0
-        for count, length_bin_end in enumerate(self.length_bin):
-            if length_bin_end > idx:
-                dataset = self.datasets[count]
-                sub_idx = idx - previous_idx
-                break
-            previous_idx = length_bin_end
-        data = self.datasets[count]
-        data = data[self.data_names[count]][self.keys[self.data_names[count]][sub_idx]]
-
-        elements = data['species']
-        elements = [element.decode("UTF-8") for element in elements]
-        offset = sum([ELEMENT_ENERGY[element] for element in elements])
-
-        x = jnp.array(data['coordinates'])
-        y = jnp.array(data['energies']) - offset
-        y = jnp.expand_dims(y, -1)
-
-        elements = jnp.array([ELEMENT[element] for element in elements])
-        elements = jax.nn.one_hot(elements, 4)
-        elements = jnp.broadcast_to(elements, (*x.shape[:-1], elements.shape[-1]))
-
-        return elements, x, y
+    def __next__(self):
+        if len(self.pointers) == 0:
+            raise StopIteration
+        else:
+            pointer = self.pointers.pop()
+            return self.get_from_pointer(pointer)
 
 
 def run():
-    data = ANIDataset()
-    idxs = onp.arange(len(data))
-    onp.random.seed(2666)
-    onp.random.shuffle(idxs)
-    idxs_tr, idxs_vl, idxs_te = onp.split(idxs, (int(0.8 * len(idxs)), int(0.05 * len(idxs))))
+    # data = ANIDataset()
+    ds_tr = onp.load("ds_tr.npy", allow_pickle=True)[()]
+    collater = Collater(ds_tr)
 
     import sake
     model = sake.models.DenseSAKEModel(
@@ -118,7 +72,8 @@ def run():
         loss = jnp.abs(y_pred - y).mean()
         return loss
 
-    i, x, y = data[idxs_tr[0].item()]
+    i, x, y = next(iter(collater))
+    print(i.shape, x.shape, y.shape)
     params = model.init(jax.random.PRNGKey(2666), i, x)
 
     import optax
@@ -135,6 +90,8 @@ def run():
         apply_fn=model.apply, params=params, tx=optimizer,
     )
 
+
+
     @jax.jit
     def step(state, i, x, y):
         params = state.params
@@ -144,18 +101,9 @@ def run():
 
     from tqdm import tqdm
     for idx_batch in tqdm(range(50)):
-        onp.random.seed(idx_batch)
-        onp.random.shuffle(idxs_tr)
-        for idx_data in idxs_tr:
-            i, x, y = data[idx_data.item()]
-            idxs = onp.random.choice(onp.arange(i.shape[0]), 1024)
-            i, x, y = i[idxs], x[idxs], y[idxs]
+        for i, x, y in collater:
             loss, state = step(state, i, x, y)
-            print(loss)
-
-
-
-
+        save_checkpoint("_checkpoint", target=state, step=idx_batch)
 
 
 
