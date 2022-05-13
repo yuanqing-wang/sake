@@ -1,45 +1,45 @@
 import pytest\
 
-# def test_distance():
-#     import jax
-#     import jax.numpy as jnp
-#     import sake
-#     x = jax.random.normal(key=jax.random.PRNGKey(2666), shape=(5, 3))
-#     x_mask = jnp.concatenate([x, jnp.ones((1, 3))], axis=0)
-#     mask = jnp.concatenate([jnp.ones(5), jnp.zeros(1)], axis=0)
-#     mask = jnp.expand_dims(mask, 0) * jnp.expand_dims(mask, 1)
-#     x_minus_xt_norm_mask = sake.functional.get_x_minus_xt_norm(
-#         sake.functional.get_x_minus_xt(
-#             x_mask
-#         )
-#     )[:5, :5, :]
-#
-#     x_minus_xt_norm = sake.functional.get_x_minus_xt_norm(
-#         sake.functional.get_x_minus_xt(
-#             x
-#         )
-#     )
-#
-#     assert jnp.allclose(
-#         x_minus_xt_norm_mask,
-#         x_minus_xt_norm,
-#     )
-#
-# def test_concat():
-#     import jax
-#     import jax.numpy as jnp
-#     import sake
-#     x = jax.random.normal(key=jax.random.PRNGKey(2666), shape=(5, 3))
-#     x_mask = jnp.concatenate([x, jnp.ones((1, 3))], axis=0)
-#     mask = jnp.concatenate([jnp.ones(5), jnp.zeros(1)], axis=0)
-#     mask = jnp.expand_dims(mask, 0) * jnp.expand_dims(mask, 1)
-#     h_cat_ht_mask = sake.functional.get_h_cat_ht(x_mask)[:5, :5, :]
-#     h_cat_ht = sake.functional.get_h_cat_ht(x)
-#
-#     assert jnp.allclose(
-#         h_cat_ht_mask,
-#         h_cat_ht,
-#     )
+def test_distance():
+    import jax
+    import jax.numpy as jnp
+    import sake
+    x = jax.random.normal(key=jax.random.PRNGKey(2666), shape=(5, 3))
+    x_mask = jnp.concatenate([x, jnp.ones((1, 3))], axis=0)
+    mask = jnp.concatenate([jnp.ones(5), jnp.zeros(1)], axis=0)
+    mask = jnp.expand_dims(mask, 0) * jnp.expand_dims(mask, 1)
+    x_minus_xt_norm_mask = sake.functional.get_x_minus_xt_norm(
+        sake.functional.get_x_minus_xt(
+            x_mask
+        )
+    )[:5, :5, :]
+
+    x_minus_xt_norm = sake.functional.get_x_minus_xt_norm(
+        sake.functional.get_x_minus_xt(
+            x
+        )
+    )
+
+    assert jnp.allclose(
+        x_minus_xt_norm_mask,
+        x_minus_xt_norm,
+    )
+
+def test_concat():
+    import jax
+    import jax.numpy as jnp
+    import sake
+    x = jax.random.normal(key=jax.random.PRNGKey(2666), shape=(5, 3))
+    x_mask = jnp.concatenate([x, jnp.ones((1, 3))], axis=0)
+    mask = jnp.concatenate([jnp.ones(5), jnp.zeros(1)], axis=0)
+    mask = jnp.expand_dims(mask, 0) * jnp.expand_dims(mask, 1)
+    h_cat_ht_mask = sake.functional.get_h_cat_ht(x_mask)[:5, :5, :]
+    h_cat_ht = sake.functional.get_h_cat_ht(x)
+
+    assert jnp.allclose(
+        h_cat_ht_mask,
+        h_cat_ht,
+    )
 
 def test_euclidean_attention():
     import jax
