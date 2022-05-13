@@ -1,12 +1,16 @@
 import jax
 import jax.numpy as jnp
 import numpy as onp
+import flax
+
+BATCH_SIZE = 128
 
 class Collater(object):
-    def __init__(self, ds_tr, batch_size=128):
+    def __init__(self, ds_tr, batch_size=128, n_device=8):
         self.ds_tr = ds_tr
-        self.batch_size = batch_size
         self.pointers = []
+        self.batch_size = batch_size
+        self.n_device = n_device
 
     def _move_to_device(ds_tr):
         for length in ds_tr:
@@ -19,9 +23,9 @@ class Collater(object):
         pointers = []
         for length in self.ds_tr:
             n_data = self.ds_tr[length]['x'].shape[0]
-            n_batches = int(n_data / self.batch_size)
-            idxs = onp.random.permutation(n_data)[:n_batches*self.batch_size]
-            idxs = idxs.reshape(n_batches, self.batch_size)
+            n_batches = int(n_data / (self.batch_size * self.n_device))
+            idxs = onp.random.permutation(n_data)[:n_batches* (self.batch_size * self.n_device)]
+            idxs = idxs.reshape(n_batches,  (self.batch_size * self.n_device))
             for idx in idxs:
                 pointers.append((length, idx))
         import random
@@ -31,11 +35,15 @@ class Collater(object):
 
     def get_from_pointer(self, pointer):
         length, idxs = pointer
-        return (
-                jax.nn.one_hot(self.ds_tr[length]['i'][idxs], 4),
-                jnp.array(self.ds_tr[length]['x'][idxs]),
-                jnp.expand_dims(jnp.array(self.ds_tr[length]['y'][idxs]), -1),
-        )
+        i = jax.nn.one_hot(self.ds_tr[length]['i'][idxs], 4)
+        x = jnp.array(self.ds_tr[length]['x'][idxs])
+        y = jnp.expand_dims(jnp.array(self.ds_tr[length]['y'][idxs]), -1)
+
+        i = i.reshape(self.n_device, self.batch_size, *i.shape[1:])
+        x = x.reshape(self.n_device, self.batch_size, *x.shape[1:])
+        y = y.reshape(self.n_device, self.batch_size, *y.shape[1:])
+
+        return i, x, y
 
     def __iter__(self):
         self.get_pointers()
@@ -72,7 +80,6 @@ def run():
         return loss
 
     i, x, y = next(iter(collater))
-    print(i.shape, x.shape, y.shape)
     params = model.init(jax.random.PRNGKey(2666), i, x)
 
     import optax
@@ -89,12 +96,14 @@ def run():
         apply_fn=model.apply, params=params, tx=optimizer,
     )
 
+    state = flax.jax_utils.replicate(state)
 
-
-    @jax.jit
+    @partial(jax.pmap, axis_name="batch")
     def step(state, i, x, y):
         params = state.params
         loss, grads = jax.value_and_grad(get_loss)(params, i, x, y)
+        loss = jax.lax.pmean(loss, "batch")
+        grads = jax.lax.pmean(grads, "batch")
         state = state.apply_gradients(grads=grads)
         return loss, state
 
@@ -103,8 +112,6 @@ def run():
         for i, x, y in collater:
             loss, state = step(state, i, x, y)
         save_checkpoint("_checkpoint", target=state, step=idx_batch)
-
-
 
 if __name__ == "__main__":
     run()
