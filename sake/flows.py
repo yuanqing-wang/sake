@@ -44,13 +44,23 @@ class ODEFlow(object):
         _jacobian = jax.vmap(partial(ODEFlow._jacobian, fn, t))
         return _jacobian(x)
 
+    # @staticmethod
+    # def trace(fn, x, t):
+    #     res = fn(x, t)
+    #     degrees_of_freedom = res.shape[-1] * res.shape[-2]
+    #     res_shape = (*res.shape[:-4], degrees_of_freedom, degrees_of_freedom)
+    #     res = jnp.reshape(res, res_shape)
+    #     trace = jnp.trace(res, axis1=-2, axis2=-1)
+    #     return trace
+
     @staticmethod
-    def trace(fn, x, t):
-        res = fn(x, t)
-        degrees_of_freedom = res.shape[-1] * res.shape[-2]
-        res_shape = (*res.shape[:-4], degrees_of_freedom, degrees_of_freedom)
-        res = jnp.reshape(res, res_shape)
-        trace = jnp.trace(res, axis1=-2, axis2=-1)
+    def trace(fn, x, t, key):
+        _fn = lambda x: fn(x, t)
+        y, vjp_fun = jax.vjp(_fn, x)
+        key, subkey = jax.random.split(key)
+        u = jax.random.normal(subkey, y.shape)
+        trace = vjp_fun(u)[0] * u
+        trace = trace.sum(axis=(-1, -2))
         return trace
 
     @staticmethod
@@ -65,19 +75,14 @@ class ODEFlow(object):
     @staticmethod
     def dynamics_and_trace(model, params):
         dynamics = partial(ODEFlow.dynamics, model, params)
-        jacobian = partial(ODEFlow.jacobian, dynamics)
-        trace = partial(ODEFlow.trace, jacobian)
+        trace = partial(ODEFlow.trace, dynamics)
         def fn(state, t):
             x, _trace = state
             return dynamics(x, t), trace(x, t)
         return fn
 
     @staticmethod
-    def call(model, params, x):
-        dynamics = partial(ODEFlow.dynamics, model, params)
-        jacobian = partial(ODEFlow.jacobian, dynamics)
-        trace = partial(ODEFlow.trace, jacobian)
-        # dynamics_and_trace = lambda x, t: (dynamics(x, t), trace(x, t))
+    def call(model, params, x, key):
         trace0 = jnp.zeros(shape=x.shape[:-2])
         fn = ODEFlow.dynamics_and_trace(model, params)
         y, logdet = odeint(fn, (x, trace0), T)
@@ -85,4 +90,4 @@ class ODEFlow(object):
         return y, logdet
 
     @staticmethod
-    def __call__(model, params, x): return ODEFlow.call(model, params, x)
+    def __call__(model, params, x, key): return ODEFlow.call(model, params, x, key)
