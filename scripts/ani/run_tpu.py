@@ -7,10 +7,11 @@ from functools import partial
 BATCH_SIZE = 1024
 
 class Collater(object):
-    def __init__(self, ds_tr, batch_size=128):
-        self.ds_tr = self._move_to_device(ds_tr)
+    def __init__(self, ds_tr, batch_size=128, n_devices=8):
+        self.ds_tr = ds_tr # self._move_to_device(ds_tr)
         self.batch_size = batch_size
         self.pointers = []
+        self.n_devices = n_devices
 
     @staticmethod
     def _move_to_device(ds_tr):
@@ -24,13 +25,17 @@ class Collater(object):
         ys = jnp.concatenate([self.ds_tr[length]['y'].reshape(-1) for length in self.ds_tr])
         return ys.mean(), ys.std()
 
+    
+    def __len__(self):
+        return len(self.get_pointers())
+
     def get_pointers(self):
         pointers = []
         for length in self.ds_tr:
             n_data = self.ds_tr[length]['x'].shape[0]
-            n_batches = int(n_data / self.batch_size)
-            idxs = onp.random.permutation(n_data)[:n_batches*self.batch_size]
-            idxs = idxs.reshape(n_batches, self.batch_size)
+            n_batches = int(n_data / (self.batch_size * self.n_devices))
+            idxs = onp.random.permutation(n_data)[:n_batches*self.batch_size*self.n_devices]
+            idxs = idxs.reshape(n_batches, self.batch_size*self.n_devices)
             for idx in idxs:
                 pointers.append((length, idx))
         import random
@@ -40,11 +45,15 @@ class Collater(object):
 
     def get_from_pointer(self, pointer):
         length, idxs = pointer
-        return (
-                jax.nn.one_hot(self.ds_tr[length]['i'][idxs], 4),
-                jnp.array(self.ds_tr[length]['x'][idxs]),
-                jnp.expand_dims(jnp.array(self.ds_tr[length]['y'][idxs]), -1),
-        )
+        i = jax.nn.one_hot(jnp.array(self.ds_tr[length]['i'][idxs]), 4)
+        x = jnp.array(self.ds_tr[length]['x'][idxs])
+        y = jnp.expand_dims(jnp.array(self.ds_tr[length]['y'][idxs]), -1)
+
+        i = i.reshape(self.n_devices, self.batch_size, *i.shape[1:])
+        x = x.reshape(self.n_devices, self.batch_size, *x.shape[1:])
+        y = y.reshape(self.n_devices, self.batch_size, *y.shape[1:])
+
+        return i, x, y
 
     def __iter__(self):
         self.get_pointers()
@@ -63,10 +72,10 @@ def run():
     collater = Collater(ds_tr)
 
     mean, std = collater.get_statistics()
-    from functools import partial
-    coloring = partial(coloring, mean=mean, std=std)
-
     import sake
+    from functools import partial
+    coloring = partial(sake.utils.coloring, mean=mean, std=std)
+
     model = sake.models.DenseSAKEModel(
         hidden_features=64,
         out_features=1,
@@ -119,8 +128,7 @@ def run():
         state = state.apply_gradients(grads=grads)
         return state
 
-    from tqdm import tqdm
-    for idx_batch in tqdm(range(1000)):
+    for idx_batch in range(1000):
         for i, x, y in collater:
             state = step(state, i, x, y)
         save_checkpoint("_checkpoint", target=state, step=idx_batch)
