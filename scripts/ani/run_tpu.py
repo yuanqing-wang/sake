@@ -7,15 +7,12 @@ from functools import partial
 BATCH_SIZE = 128
 
 class Collater(object):
-    def __init__(self, ds_tr, batch_size=BATCH_SIZE, n_device=8):
-        self.ds_tr = ds_tr
-        self.pointers = []
+    def __init__(self, ds_tr, batch_size=128):
+        self.ds_tr = self._move_to_device(ds_tr)
         self.batch_size = batch_size
-        self.n_device = n_device
+        self.pointers = []
 
-    def __len__(self):
-        return len(self.get_pointers())
-
+    @staticmethod
     def _move_to_device(ds_tr):
         for length in ds_tr:
             ds_tr[length]['i'] = jnp.array(ds_tr[length]['i'])
@@ -23,13 +20,17 @@ class Collater(object):
             ds_tr[length]['y'] = jnp.array(ds_tr[length]['y'])
         return ds_tr
 
+    def get_statistics(self):
+        ys = jnp.concatenate([self.ds_tr[length]['y'].reshape(-1) for length in self.ds_tr])
+        return ys.mean(), ys.std()
+
     def get_pointers(self):
         pointers = []
         for length in self.ds_tr:
             n_data = self.ds_tr[length]['x'].shape[0]
-            n_batches = int(n_data / (self.batch_size * self.n_device))
-            idxs = onp.random.permutation(n_data)[:n_batches* (self.batch_size * self.n_device)]
-            idxs = idxs.reshape(n_batches,  (self.batch_size * self.n_device))
+            n_batches = int(n_data / self.batch_size)
+            idxs = onp.random.permutation(n_data)[:n_batches*self.batch_size]
+            idxs = idxs.reshape(n_batches, self.batch_size)
             for idx in idxs:
                 pointers.append((length, idx))
         import random
@@ -39,15 +40,11 @@ class Collater(object):
 
     def get_from_pointer(self, pointer):
         length, idxs = pointer
-        i = jax.nn.one_hot(self.ds_tr[length]['i'][idxs], 4)
-        x = jnp.array(self.ds_tr[length]['x'][idxs])
-        y = jnp.expand_dims(jnp.array(self.ds_tr[length]['y'][idxs]), -1)
-
-        i = i.reshape(self.n_device, self.batch_size, *i.shape[1:])
-        x = x.reshape(self.n_device, self.batch_size, *x.shape[1:])
-        y = y.reshape(self.n_device, self.batch_size, *y.shape[1:])
-
-        return i, x, y
+        return (
+                jax.nn.one_hot(self.ds_tr[length]['i'][idxs], 4),
+                jnp.array(self.ds_tr[length]['x'][idxs]),
+                jnp.expand_dims(jnp.array(self.ds_tr[length]['y'][idxs]), -1),
+        )
 
     def __iter__(self):
         self.get_pointers()
@@ -60,22 +57,26 @@ class Collater(object):
             pointer = self.pointers.pop()
             return self.get_from_pointer(pointer)
 
-
 def run():
     # data = ANIDataset()
     ds_tr = onp.load("ds_tr.npy", allow_pickle=True)[()]
     collater = Collater(ds_tr)
 
+    mean, std = collater.get_statistics()
+    from functools import partial
+    coloring = partial(coloring, mean=mean, std=std)
+
     import sake
     model = sake.models.DenseSAKEModel(
         hidden_features=64,
         out_features=1,
-        depth=8,
+        depth=6,
     )
 
     def get_y_pred(params, i, x):
         y_pred, _, __ = model.apply(params, i, x)
         y_pred = y_pred.sum(axis=-2)
+        y_pred = coloring(y_pred)
         return y_pred
 
     def get_loss(params, i, x, y):
@@ -98,7 +99,7 @@ def run():
     optimizer = optax.chain(
         optax.additive_weight_decay(1e-5),
         optax.clip(1.0),
-        optax.adam(1e-5),
+        optax.adam(scheduler),
     )
 
     from flax.training.train_state import TrainState
