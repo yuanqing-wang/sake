@@ -4,16 +4,21 @@ import numpy as onp
 
 class Collater(object):
     def __init__(self, ds_tr, batch_size=128):
-        self.ds_tr = ds_tr
+        self.ds_tr = self._move_to_device(ds_tr)
         self.batch_size = batch_size
         self.pointers = []
 
+    @staticmethod
     def _move_to_device(ds_tr):
         for length in ds_tr:
             ds_tr[length]['i'] = jnp.array(ds_tr[length]['i'])
             ds_tr[length]['x'] = jnp.array(ds_tr[length]['x'])
             ds_tr[length]['y'] = jnp.array(ds_tr[length]['y'])
         return ds_tr
+
+    def get_statistics(self):
+        ys = jnp.concatenate([self.ds_tr[length]['y'].reshape(-1) for length in self.ds_tr])
+        return ys.mean(), ys.std()
 
     def get_pointers(self):
         pointers = []
@@ -61,9 +66,14 @@ def run():
         depth=8,
     )
 
+    from functools import partial
+    mean, std = collater.get_statistics()
+    coloring = sake.utils.coloring(mean=mean, std=std)
+
     def get_y_pred(params, i, x):
         y_pred, _, __ = model.apply(params, i, x)
         y_pred = y_pred.sum(axis=-2)
+        y_pred = coloring(y_pred)
         return y_pred
 
     def get_loss(params, i, x, y):
@@ -72,12 +82,18 @@ def run():
         return loss
 
     i, x, y = next(iter(collater))
-    print(i.shape, x.shape, y.shape)
     params = model.init(jax.random.PRNGKey(2666), i, x)
 
     import optax
+    scheduler = optax.warmup_cosine_decay_schedule(
+        init_value=1e-6,
+        peak_value=1e-3,
+        warmup_steps=50 * n_batches,
+        decay_steps=450 * n_batches,
+    )
+
     optimizer = optax.chain(
-        optax.additive_weight_decay(1e-12),
+        optax.additive_weight_decay(1e-5),
         optax.clip(1.0),
         optax.adam(1e-5),
     )
@@ -89,8 +105,6 @@ def run():
         apply_fn=model.apply, params=params, tx=optimizer,
     )
 
-
-
     @jax.jit
     def step(state, i, x, y):
         params = state.params
@@ -99,12 +113,10 @@ def run():
         return loss, state
 
     from tqdm import tqdm
-    for idx_batch in tqdm(range(50)):
+    for idx_batch in tqdm(range(500)):
         for i, x, y in collater:
             loss, state = step(state, i, x, y)
         save_checkpoint("_checkpoint", target=state, step=idx_batch)
-
-
 
 if __name__ == "__main__":
     run()
