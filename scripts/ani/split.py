@@ -8,10 +8,8 @@ def run():
     for length in lengths:
         idxs = np.arange(data[length]['x'].shape[0])
         np.random.shuffle(idxs)
-        print(len(idxs))
         idxs_tr, idxs_vl, idxs_te = np.split(idxs, (int(0.85 * len(idxs)), int(0.90 * len(idxs))))
-        print(len(idxs_tr), len(idxs_vl), len(idxs_te))    
-        
+
         ds_tr[length], ds_vl[length], ds_te[length] = {}, {}, {}
         ds_tr[length]['i'], ds_tr[length]['x'], ds_tr[length]['y'] = data[length]['i'][idxs_tr], data[length]['x'][idxs_tr], data[length]['y'][idxs_tr]
         ds_vl[length]['i'], ds_vl[length]['x'], ds_vl[length]['y'] = data[length]['i'][idxs_vl], data[length]['x'][idxs_vl], data[length]['y'][idxs_vl]
@@ -23,5 +21,3 @@ def run():
 
 if __name__ == "__main__":
     run()
-
-       
