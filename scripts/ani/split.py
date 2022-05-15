@@ -15,9 +15,9 @@ def run():
         ds_vl[length]['i'], ds_vl[length]['x'], ds_vl[length]['y'] = data[length]['i'][idxs_vl], data[length]['x'][idxs_vl], data[length]['y'][idxs_vl]
         ds_te[length]['i'], ds_te[length]['x'], ds_te[length]['y'] = data[length]['i'][idxs_te], data[length]['x'][idxs_te], data[length]['y'][idxs_te]
 
-    # np.save("ds_tr", ds_tr)
-    # np.save("ds_vl", ds_vl)
-    # np.save("ds_te", ds_te)
+    np.save("ds_tr", ds_tr)
+    np.save("ds_vl", ds_vl)
+    np.save("ds_te", ds_te)
 
 if __name__ == "__main__":
     run()
