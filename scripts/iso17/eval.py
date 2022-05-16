@@ -41,16 +41,16 @@ def run():
 
 
     from flax.training.checkpoints import restore_checkpoint
-    state = restore_checkpoint("_checkpoint", None)
+    state = restore_checkpoint("__checkpoint", None)
     params = state['params']
 
     f_losses = []
     e_losses = []
     for idx in range(n_batches):
-        f_losses.append(jnp.abs(get_f_pred(params, params, i_vl[idx], x_vl[idx]) - e_vl[idx]).mean())
-        e_losses.append(jnp.abs(get_f_pred(params, params, i_vl[idx], x_vl[idx]) - e_vl[idx]).mean())
-    f_losses = jnp.mean(f_losses)
-    e_losses = jnp.mean(e_losses)
+        f_losses.append(jnp.abs(get_f_pred(params, i_vl[idx], x_vl[idx]) - f_vl[idx]).mean().item())
+        e_losses.append(jnp.abs(get_e_pred(params, i_vl[idx], x_vl[idx]) - e_vl[idx]).mean().item())
+    f_losses = onp.mean(f_losses)
+    e_losses = onp.mean(e_losses)
 
     print(f_losses, e_losses)
 
