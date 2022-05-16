@@ -96,7 +96,7 @@ class ODEFlow(object):
 
 class AugmentedFlowLayer(nn.Module):
     hidden_features: int=64
-    depth: int=8
+    depth: int=3
     activation: Callable=nn.silu
     def setup(self):
         import sake
@@ -144,8 +144,8 @@ class AugmentedFlowLayer(nn.Module):
     def __call__(self, h, x, v): return self.f_forward(h, x, v)
 
 class AugmentedFlowModel(nn.Module):
-    depth: int=4
-    mp_depth: int=8
+    depth: int=3
+    mp_depth: int=3
     hidden_features: int=64
     activation: Callable=nn.silu
     def setup(self):

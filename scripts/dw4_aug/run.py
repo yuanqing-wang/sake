@@ -43,10 +43,10 @@ def run():
     def get_loss_vl(params, key):
         x = data_val
         v = prior.sample(key=key, shape=x.shape)
+        v0 = v
         x, v, sum_log_det = model.apply(params, x, v, method=model.f_backward)
-        loss = (-prior.log_prob(x) - prior.log_prob(v) + sum_log_det).mean()
+        loss = (-prior.log_prob(x) - prior.log_prob(v) + sum_log_det + v_prior.log_prob(v0)).mean()
         return loss
-
 
     @jax.jit
     def step(state, key):
