@@ -178,10 +178,10 @@ class AugmentedFlowModel(nn.Module):
     def f_backward(self, h, x, v):
         sum_log_det = 0.0
         for xv, vx in zip(self.xv_layers, self.vx_layers):
-            v, x, log_det = vx_layer.f_backward(h, v, x)
+            v, x, log_det = vx.f_backward(h, v, x)
             sum_log_det = sum_log_det + log_det
 
-            x, v, log_det = xv_layer.f_backward(h, x, v)
+            x, v, log_det = xv.f_backward(h, x, v)
             sum_log_det = sum_log_det + log_det
         return x, v, sum_log_det
 

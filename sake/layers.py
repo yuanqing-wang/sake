@@ -100,7 +100,7 @@ class DenseSAKELayer(nn.Module):
 
         # (batch_size, n, n, 3)
         # x_minus_xt = x_minus_xt * euclidean_attention.mean(dim=-1, keepdim=True) / (x_minus_xt_norm + 1e-5)
-        x_minus_xt = x_minus_xt / (x_minus_xt_norm + 1e-10) # ** 2
+        x_minus_xt = x_minus_xt / (x_minus_xt_norm + 1e-5) # ** 2
 
         # (batch_size, n, n, coefficients, 3)
         combinations = jnp.expand_dims(x_minus_xt, -2) * jnp.expand_dims(coefficients, -1)
