@@ -149,29 +149,29 @@ class AugmentedFlowModel(nn.Module):
     hidden_features: int=64
     activation: Callable=nn.silu
     def setup(self):
-        for _ in range(self.depth):
+        for idx in range(self.depth):
             setattr(
                 self,
-                "xv_%s",
-                AugmentedFlowLayer(hidden_features, mp_depth),
+                "xv_%s" % idx,
+                AugmentedFlowLayer(self.hidden_features, self.mp_depth),
             )
 
             setattr(
                 self,
-                "vx_%s",
-                AugmentedFlowLayer(hidden_features, mp_depth),
+                "vx_%s" % idx,
+                AugmentedFlowLayer(self.hidden_features, self.mp_depth),
             )
 
-        self.xv_layers = [getattr(self, "xv_%s" % idx) for idx in range(length)]
-        self.vx_layers = [getattr(self, "vx_%s" % idx) for idx in range(length)]
+        self.xv_layers = [getattr(self, "xv_%s" % idx) for idx in range(self.depth)]
+        self.vx_layers = [getattr(self, "vx_%s" % idx) for idx in range(self.depth)]
 
     def f_forward(self, h, x, v):
         sum_log_det = 0.0
         for xv, vx in zip(self.xv_layers, self.vx_layers):
-            x, v, log_det = xv_layer.f_forward(h, x, v)
+            x, v, log_det = xv.f_forward(h, x, v)
             sum_log_det = sum_log_det + log_det
 
-            v, x, log_det = vx_layer.f_forward(h, v, x)
+            v, x, log_det = vx.f_forward(h, v, x)
             sum_log_det = sum_log_det + log_det
         return x, v, sum_log_det
 
@@ -185,4 +185,4 @@ class AugmentedFlowModel(nn.Module):
             sum_log_det = sum_log_det + log_det
         return x, v, sum_log_det
 
-    def call(self, h, x, v): return self.f_forward(h, x, v)
+    def __call__(self, h, x, v): return self.f_forward(h, x, v)
