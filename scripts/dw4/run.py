@@ -2,6 +2,7 @@ import sys
 import os
 import jax
 import jax.numpy as jnp
+import optax
 sys.path.append(os.path.abspath("en_flows"))
 from en_flows.dw4_experiment.dataset import get_data_dw4, remove_mean
 import sake
@@ -21,31 +22,65 @@ def run():
     data_val = data_val - data_val.mean(dim=-2, keepdim=True)
     data_test = data_test - data_test.mean(dim=-2, keepdim=True)
 
-    data_train = jnp.array(data_train.numpy())
-    data_val = jnp.array(data_train.numpy())
-    data_test = jnp.array(data_test.numpy())
+    data_train = jnp.array(data_train)
+    data_val = jnp.array(data_train)
+    data_test = jnp.array(data_test)
 
-    model = sake.models.DenseSAKEModel(width=64, depth=8)
+    model = sake.models.DenseSAKEModel(hidden_features=16, depth=16, out_features=1)
     key = jax.random.PRNGKey(2666)
-    params = model.init(key, data_train)
+    params = model.init(key, data_train.sum(axis=-1, keepdims=True), data_train)
 
     prior = sake.flows.CenteredGaussian
 
-    def loss(params):
-        z, trace = sake.flows.ODEFlow.call(model, params)
+    # @jax.jit
+    def get_loss(params, key):
+        z, trace = sake.flows.ODEFlow.call(model, params, data_train, key)
         log_pz = prior.log_prob(z)
         log_px = (log_pz + trace).mean()
         loss = -log_px
         return loss
 
-    loss(params)
+    # @jax.jit
+    def get_loss_vl(params, key):
+        z, trace = sake.flows.ODEFlow.call(model, params, data_val, key)
+        log_pz = prior.log_prob(z)
+        log_px = (log_pz + trace).mean()
+        loss = -log_px
+        return loss
 
-    # optimizer = optax.adam(1e-4)
-    # from flax.training.train_state import TrainState
-    # from flax.training.checkpoints import save_checkpoint
-    # state = TrainState.create(
-    #     apply_fn=model.apply, params=params, tx=optimizer,
-    # )
+    @jax.jit
+    def step(state, key):
+        params = state.params
+        grads = jax.grad(get_loss)(params, key)
+        state = state.apply_gradients(grads=grads)
+        return state
+
+    import optax
+    scheduler = optax.warmup_cosine_decay_schedule(
+        init_value=1e-6,
+        peak_value=1e-3,
+        warmup_steps=50,
+        decay_steps=450,
+    )
+    optimizer = optax.chain(
+        optax.additive_weight_decay(1e-5),
+        optax.clip(1.0),
+        optax.adam(scheduler),
+    )
+
+    from flax.training.train_state import TrainState
+    from flax.training.checkpoints import save_checkpoint
+    state = TrainState.create(
+         apply_fn=model.apply, params=params, tx=optimizer,
+    )
+
+    import tqdm
+    for idx_batch in tqdm.tqdm(range(500)):
+        key, subkey = jax.random.split(key)
+        state = step(state, subkey)
+        if idx_batch % 10 == 0:
+            print(get_loss_vl(state.params, key), flush=True)
+
 
 if __name__ == "__main__":
     run()
