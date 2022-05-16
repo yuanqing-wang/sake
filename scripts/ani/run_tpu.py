@@ -97,7 +97,7 @@ def run():
     )
 
     optimizer = optax.chain(
-        optax.additive_weight_decay(1e-5),
+        optax.additive_weight_decay(1e-12),
         optax.clip(1.0),
         optax.adam(scheduler),
     )
