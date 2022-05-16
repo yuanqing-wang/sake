@@ -5,6 +5,7 @@ from flax import linen as nn
 from .models import DenseSAKEModel
 from functools import partial
 import math
+from typing import Callable
 
 T = jnp.array((0.0, 1.0))
 
@@ -21,7 +22,7 @@ class CenteredGaussian(object):
 
     @staticmethod
     def sample(key, shape):
-        x = jnp.random.normal(key=key, shape=shape)
+        x = jax.random.normal(key=key, shape=shape)
         x = x - x.mean(axis=-2, keepdims=True)
         return x
 
@@ -91,3 +92,97 @@ class ODEFlow(object):
 
     @staticmethod
     def __call__(model, params, x, key): return ODEFlow.call(model, params, x, key)
+
+
+class AugmentedFlowLayer(nn.Module):
+    hidden_features: int=64
+    depth: int=8
+    activation: Callable=nn.silu
+    def setup(self):
+        import sake
+        self.sake_model = sake.models.DenseSAKEModel(
+            hidden_features=self.hidden_features,
+            depth=self.depth,
+            out_features=1,
+            activation=self.activation,
+        )
+        self.scale_mlp = nn.Sequential(
+            [
+                nn.Dense(self.hidden_features),
+                self.activation,
+                nn.Dense(1, use_bias=False),
+                jnp.tanh,
+            ]
+        )
+
+    def mp(self, h, x):
+        x0 = x
+        h = jnp.concatenate([h, (x ** 2).sum(-1, keepdims=True)], axis=-1)
+        h = jnp.concatenate([h, jnp.expand_dims(jnp.zeros_like(h[..., -1, :]), -2)], axis=-2)
+        x = jnp.concatenate([x, jnp.expand_dims(jnp.zeros_like(x[..., -1, :]), -2)], axis=-2)
+        h, x, _ = self.sake_model(h, x)
+        x = x[..., :-1, :]
+        h = h[..., :-1, :]
+        translation = x - x0
+        translation = translation - translation.mean(axis=-2, keepdims=True)
+        scale = self.scale_mlp(h).mean(axis=-2, keepdims=True)
+        return scale, translation
+
+    def f_forward(self, h, x, v):
+        scale, translation = self.mp(h, x)
+        v = jnp.exp(scale) * v + translation
+        log_det = scale.sum((-1, -2)) * v.shape[-1] * v.shape[-2]
+        return x, v, log_det
+
+    def f_backward(self, h, x, v):
+        scale, translation = self.mp(h, x)
+        v = v - translation
+        v = jnp.exp(-scale) * v
+        log_det = scale.sum((-1, -2)) * v.shape[-1] * v.shape[-2]
+        return x, v, log_det
+
+    def __call__(self, h, x, v): return self.f_forward(h, x, v)
+
+class AugmentedFlowModel(nn.Module):
+    depth: int=4
+    mp_depth: int=8
+    hidden_features: int=64
+    activation: Callable=nn.silu
+    def setup(self):
+        for _ in range(self.depth):
+            setattr(
+                self,
+                "xv_%s",
+                AugmentedFlowLayer(hidden_features, mp_depth),
+            )
+
+            setattr(
+                self,
+                "vx_%s",
+                AugmentedFlowLayer(hidden_features, mp_depth),
+            )
+
+        self.xv_layers = [getattr(self, "xv_%s" % idx) for idx in range(length)]
+        self.vx_layers = [getattr(self, "vx_%s" % idx) for idx in range(length)]
+
+    def f_forward(self, h, x, v):
+        sum_log_det = 0.0
+        for xv, vx in zip(self.xv_layers, self.vx_layers):
+            x, v, log_det = xv_layer.f_forward(h, x, v)
+            sum_log_det = sum_log_det + log_det
+
+            v, x, log_det = vx_layer.f_forward(h, v, x)
+            sum_log_det = sum_log_det + log_det
+        return x, v, sum_log_det
+
+    def f_backward(self, h, x, v):
+        sum_log_det = 0.0
+        for xv, vx in zip(self.xv_layers, self.vx_layers):
+            v, x, log_det = vx_layer.f_backward(h, v, x)
+            sum_log_det = sum_log_det + log_det
+
+            x, v, log_det = xv_layer.f_backward(h, x, v)
+            sum_log_det = sum_log_det + log_det
+        return x, v, sum_log_det
+
+    def call(self, h, x, v): return self.f_forward(h, x, v)
