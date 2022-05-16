@@ -4,7 +4,7 @@ import numpy as onp
 import flax
 from functools import partial
 
-BATCH_SIZE = 1024
+BATCH_SIZE = 128
 
 class Collater(object):
     def __init__(self, ds_tr, batch_size=128):

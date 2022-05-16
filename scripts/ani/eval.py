@@ -1,11 +1,11 @@
 import jax
 import jax.numpy as jnp
 import numpy as onp
-from run import Collator
+from run import Collater
 
 def run():
     # data = ANIDataset()
-    ds_vl = onp.load("ds_vl.npy", allow_pickle=True)[()]
+    ds_vl = onp.load("ds_te.npy", allow_pickle=True)[()]
     collater = Collater(ds_vl)
 
     import sake
@@ -28,11 +28,16 @@ def run():
     from flax.training.checkpoints import restore_checkpoint
     state = restore_checkpoint("_checkpoint", None)
 
+    from flax.jax_utils import unreplicate
+    params = unreplicate(state['params'])
+
     from tqdm import tqdm
     count = 0
     loss = 0.0
     for i, x, y in collater:
-        loss += get_loss(state.params, i, x, y).item()
+        _loss = get_loss(params, i, x, y).item()
+        loss = loss + _loss
+        print(_loss / i.shape[0])
         count += i.shape[0]
     print(loss / float(count))
 
