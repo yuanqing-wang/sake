@@ -74,18 +74,18 @@ class ODEFlow(object):
         return logdet
 
     @staticmethod
-    def dynamics_and_trace(model, params):
+    def dynamics_and_trace(model, params, key):
         dynamics = partial(ODEFlow.dynamics, model, params)
         trace = partial(ODEFlow.trace, dynamics)
         def fn(state, t):
             x, _trace = state
-            return dynamics(x, t), trace(x, t)
+            return dynamics(x, t), trace(x, t, key)
         return fn
 
     @staticmethod
     def call(model, params, x, key):
         trace0 = jnp.zeros(shape=x.shape[:-2])
-        fn = ODEFlow.dynamics_and_trace(model, params)
+        fn = ODEFlow.dynamics_and_trace(model, params, key)
         y, logdet = odeint(fn, (x, trace0), T)
         y, logdet = y[-1], logdet[-1]
         return y, logdet
