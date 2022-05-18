@@ -5,7 +5,7 @@ def test_augmented_flow_layer():
     import jax.numpy as jnp
     import sake
     from functools import partial
-    model = sake.flows.AugmentedFlowLayer()
+    model = sake.flows.AugmentedFlowLayer(depth=4)
     h = jax.random.normal(key=jax.random.PRNGKey(0), shape=(5, 1))
     x = sake.flows.CenteredGaussian().sample(key=jax.random.PRNGKey(1), shape=(5, 3))
     v = sake.flows.CenteredGaussian().sample(key=jax.random.PRNGKey(2), shape=(5, 3))
@@ -14,6 +14,12 @@ def test_augmented_flow_layer():
 
     assert jnp.allclose(_x.mean(-2), 0.0, atol=1e-5, rtol=10000)
     assert jnp.allclose(_v.mean(-2), 0.0, atol=1e-5, rtol=10000)
+
+    __x, __v, _log_det = model.apply(params, h, _x, _v, method=model.f_backward)
+
+    assert jnp.allclose(__x, x)
+    assert jnp.allclose(__v, v)
+    assert jnp.allclose(log_det, _log_det)
 
     def fn(z):
         x, v = jnp.split(z, 2, axis=-1)
@@ -25,12 +31,13 @@ def test_augmented_flow_layer():
     _, log_det_auto = jnp.linalg.slogdet(jac)
     assert jnp.allclose(log_det_auto, log_det)
 
+
 def test_augmented_flow_model():
     import jax
     import jax.numpy as jnp
     import sake
     from functools import partial
-    model = sake.flows.AugmentedFlowModel()
+    model = sake.flows.AugmentedFlowModel(depth=4)
     h = jax.random.normal(key=jax.random.PRNGKey(0), shape=(5, 1))
     x = sake.flows.CenteredGaussian().sample(key=jax.random.PRNGKey(1), shape=(5, 3))
     v = sake.flows.CenteredGaussian().sample(key=jax.random.PRNGKey(2), shape=(5, 3))
@@ -39,6 +46,11 @@ def test_augmented_flow_model():
 
     assert jnp.allclose(_x.mean(-2), 0.0, atol=1e-5, rtol=10000)
     assert jnp.allclose(_v.mean(-2), 0.0, atol=1e-5, rtol=10000)
+
+    __x, __v, _log_det = model.apply(params, h, _x, _v, method=model.f_backward)
+    assert jnp.allclose(__x, x)
+    assert jnp.allclose(__v, v)
+    assert jnp.allclose(log_det, _log_det)
 
     def fn(z):
         x, v = jnp.split(z, 2, axis=-1)

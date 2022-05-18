@@ -167,7 +167,7 @@ class AugmentedFlowModel(nn.Module):
 
     def f_forward(self, h, x, v):
         sum_log_det = 0.0
-        for xv, vx in zip(self.xv_layers, self.vx_layers):
+        for xv, vx in zip(self.xv_layers[::-1], self.vx_layers[::-1]):
             x, v, log_det = xv.f_forward(h, x, v)
             sum_log_det = sum_log_det + log_det
 
