@@ -22,7 +22,9 @@ class DenseSAKEModel(nn.Module):
         )
 
         if isinstance(self.update, bool):
-            self.update = [self.update for _ in range(self.depth)]
+            update = [self.update for _ in range(self.depth)]
+        else:
+            update = self.update
 
         for idx in range(self.depth):
             setattr(
@@ -31,7 +33,7 @@ class DenseSAKEModel(nn.Module):
                 DenseSAKELayer(
                     hidden_features=self.hidden_features,
                     out_features=self.hidden_features,
-                    update=self.update[idx],
+                    update=update[idx],
                 ),
             )
 
