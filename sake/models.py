@@ -1,7 +1,7 @@
 import jax
 import jax.numpy as jnp
 from flax import linen as nn
-from typing import Callable
+from typing import Callable, Union, List
 from .layers import DenseSAKELayer
 
 class DenseSAKEModel(nn.Module):
@@ -9,6 +9,7 @@ class DenseSAKEModel(nn.Module):
     out_features: int
     depth: int = 4
     activation: Callable=nn.silu
+    update: Union[List[bool], bool]=True
 
     def setup(self):
         self.embedding_in = nn.Dense(self.hidden_features)
@@ -20,6 +21,9 @@ class DenseSAKEModel(nn.Module):
             ],
         )
 
+        if isinstance(self.update, bool):
+            self.update = [self.update for _ in range(self.depth)]
+
         for idx in range(self.depth):
             setattr(
                 self,
@@ -27,6 +31,7 @@ class DenseSAKEModel(nn.Module):
                 DenseSAKELayer(
                     hidden_features=self.hidden_features,
                     out_features=self.hidden_features,
+                    update=self.update[idx],
                 ),
             )
 
