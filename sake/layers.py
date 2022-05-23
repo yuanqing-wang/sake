@@ -44,6 +44,7 @@ class DenseSAKELayer(nn.Module):
     hidden_features : int
     activation : Callable = jax.nn.silu
     n_heads : int = 4
+    update: bool=True
 
     def setup(self):
         self.edge_model = ContinuousFilterConvolutionWithConcatenation(self.hidden_features)
@@ -58,14 +59,15 @@ class DenseSAKELayer(nn.Module):
             ]
         )
 
-        self.velocity_mlp = nn.Sequential(
-            [
-                nn.Dense(self.hidden_features),
-                self.activation,
-                nn.Dense(1, use_bias=False),
-                double_sigmoid,
-            ],
-        )
+        if self.update:
+            self.velocity_mlp = nn.Sequential(
+                [
+                    nn.Dense(self.hidden_features),
+                    self.activation,
+                    nn.Dense(1, use_bias=False),
+                    double_sigmoid,
+                ],
+            )
 
         self.semantic_attention_mlp = nn.Sequential(
             [
@@ -100,7 +102,7 @@ class DenseSAKELayer(nn.Module):
 
         # (batch_size, n, n, 3)
         # x_minus_xt = x_minus_xt * euclidean_attention.mean(dim=-1, keepdim=True) / (x_minus_xt_norm + 1e-5)
-        x_minus_xt = x_minus_xt / (x_minus_xt_norm + 1e-10) # ** 2
+        x_minus_xt = x_minus_xt / (x_minus_xt_norm + 1e-5) # ** 2
 
         # (batch_size, n, n, coefficients, 3)
         combinations = jnp.expand_dims(x_minus_xt, -2) * jnp.expand_dims(coefficients, -1)
@@ -201,23 +203,26 @@ class DenseSAKELayer(nn.Module):
         h_e_att = jnp.expand_dims(h_e_mtx, -1) * jnp.expand_dims(combined_attention, -2)
         h_e_att = jnp.reshape(h_e_att, h_e_att.shape[:-2] + (-1, ))
         h_combinations, delta_v = self.spatial_attention(h_e_att, x_minus_xt, x_minus_xt_norm, mask=mask)
-        if mask is not None:
-            delta_v = self.v_mixing(delta_v.swapaxes(-1, -2)).swapaxes(-1, -2).sum(axis=(-2, -3))
-            delta_v = delta_v / (mask.sum(-1, keepdims=True) + 1e-10)
-        else:
-            delta_v = self.v_mixing(delta_v.swapaxes(-1, -2)).swapaxes(-1, -2).mean(axis=(-2, -3))
-
-        delta_v = jnp.tanh(delta_v)
 
         # h_e_mtx = (h_e_mtx.unsqueeze(-1) * combined_attention.unsqueeze(-2)).flatten(-2, -1)
         h_e = self.aggregate(h_e_att, mask=mask)
         h = self.node_model(h, h_e, h_combinations)
 
-        if v is not None:
-            v = self.velocity_model(v, h)
-        else:
-            v = jnp.zeros_like(x)
+        if self.update:
+            if mask is not None:
+                delta_v = self.v_mixing(delta_v.swapaxes(-1, -2)).swapaxes(-1, -2).sum(axis=(-2, -3))
+                delta_v = delta_v / (mask.sum(-1, keepdims=True) + 1e-10)
+            else:
+                delta_v = self.v_mixing(delta_v.swapaxes(-1, -2)).swapaxes(-1, -2).mean(axis=(-2, -3))
 
-        v = delta_v + v
-        x = x + v
+            delta_v = jnp.tanh(delta_v)
+
+            if v is not None:
+                v = self.velocity_model(v, h)
+            else:
+                v = jnp.zeros_like(x)
+
+            v = delta_v + v
+            x = x + v
+        
         return h, x, v

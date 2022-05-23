@@ -4,7 +4,7 @@ import numpy as onp
 import flax
 from functools import partial
 
-BATCH_SIZE = 1024
+BATCH_SIZE = 128
 
 class Collater(object):
     def __init__(self, ds_tr, batch_size=128, n_devices=8):
@@ -106,7 +106,7 @@ def run():
     )
 
     optimizer = optax.chain(
-        optax.additive_weight_decay(1e-5),
+        optax.additive_weight_decay(1e-12),
         optax.clip(1.0),
         optax.zero_nans(),
         optax.adam(scheduler),

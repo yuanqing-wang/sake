@@ -26,7 +26,7 @@ def run():
     data_val = jnp.array(data_train)
     data_test = jnp.array(data_test)
 
-    model = sake.models.DenseSAKEModel(hidden_features=16, depth=16, out_features=1)
+    model = sake.flows.AugmentedFlowModel()
     key = jax.random.PRNGKey(2666)
     params = model.init(key, data_train.sum(axis=-1, keepdims=True), data_train)
 
@@ -34,18 +34,18 @@ def run():
 
     # @jax.jit
     def get_loss(params, key):
-        z, trace = sake.flows.ODEFlow.call(model, params, data_train, key)
-        log_pz = prior.log_prob(z)
-        log_px = (log_pz + trace).mean()
-        loss = -log_px
+        x = data_train
+        v = prior.sample(key=key, shape=x.shape)
+        x, v, sum_log_det = model.apply(params, x, v, method=model.f_backward)
+        loss = (-prior.log_prob(x) - prior.log_prob(v) + sum_log_det).mean()
         return loss
 
-    # @jax.jit
     def get_loss_vl(params, key):
-        z, trace = sake.flows.ODEFlow.call(model, params, data_val, key)
-        log_pz = prior.log_prob(z)
-        log_px = (log_pz + trace).mean()
-        loss = -log_px
+        x = data_val
+        v = prior.sample(key=key, shape=x.shape)
+        v0 = v
+        x, v, sum_log_det = model.apply(params, x, v, method=model.f_backward)
+        loss = (-prior.log_prob(x) - prior.log_prob(v) + sum_log_det + v_prior.log_prob(v0)).mean()
         return loss
 
     @jax.jit

@@ -22,6 +22,7 @@ def get_data():
     for dataset in datasets:
         dataset_name = next(iter(dataset.keys()))
         for entry in dataset[dataset_name]:
+            print(entry)
             entry = dataset[dataset_name][entry]
             elements = entry['species']
             elements = [element.decode("UTF-8") for element in elements]
