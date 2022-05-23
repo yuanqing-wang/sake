@@ -53,6 +53,9 @@ class Collater(object):
             pointer = self.pointers.pop()
             return self.get_from_pointer(pointer)
 
+    def __len__(self):
+        return len(self.get_pointers())
+
 
 def run():
     # data = ANIDataset()
@@ -63,7 +66,7 @@ def run():
     model = sake.models.DenseSAKEModel(
         hidden_features=64,
         out_features=1,
-        depth=8,
+        depth=6,
     )
 
     from functools import partial
@@ -95,7 +98,7 @@ def run():
     optimizer = optax.chain(
         optax.additive_weight_decay(1e-5),
         optax.clip(1.0),
-        optax.adam(1e-5),
+        scheduler,
     )
 
     from flax.training.train_state import TrainState
@@ -108,14 +111,14 @@ def run():
     @jax.jit
     def step(state, i, x, y):
         params = state.params
-        loss, grads = jax.value_and_grad(get_loss)(params, i, x, y)
+        grads = jax.grad(get_loss)(params, i, x, y)
         state = state.apply_gradients(grads=grads)
-        return loss, state
+        return state
 
     from tqdm import tqdm
     for idx_batch in tqdm(range(500)):
         for i, x, y in collater:
-            loss, state = step(state, i, x, y)
+            state = step(state, i, x, y)
         save_checkpoint("_checkpoint", target=state, step=idx_batch)
 
 if __name__ == "__main__":
