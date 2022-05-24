@@ -12,11 +12,8 @@ def run():
     coloring = partial(coloring, mean=mean, std=std)
 
     # data = ANIDataset()
-<<<<<<< HEAD
-    ds_vl = onp.load("ds_tr.npy", allow_pickle=True)[()]
-=======
+    # ds_vl = onp.load("ds_tr.npy", allow_pickle=True)[()]
     ds_vl = onp.load("ds_te.npy", allow_pickle=True)[()]
->>>>>>> eedde6c9dcb11f41d362764b171c33303480dd01
     collater = Collater(ds_vl)
 
     import sake
@@ -42,22 +39,14 @@ def run():
     from flax.jax_utils import unreplicate
     params = unreplicate(state['params'])
 
-    from flax.jax_utils import unreplicate
-    params = unreplicate(state['params'])
-
     from tqdm import tqdm
     count = 0
     loss = 0.0
     for i, x, y in collater:
         _loss = get_loss(params, i, x, y).item()
-<<<<<<< HEAD
-        loss += _loss
-        print(_loss / float(i.shape[0]))
-=======
         loss = loss + _loss
-        print(_loss / i.shape[0])
->>>>>>> eedde6c9dcb11f41d362764b171c33303480dd01
         count += i.shape[0]
+        print(_loss)
     print(loss / float(count))
 
 if __name__ == "__main__":
