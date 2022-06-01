@@ -88,17 +88,11 @@ def run():
     params = model.init(jax.random.PRNGKey(2666), i, x)
 
     import optax
-    scheduler = optax.warmup_cosine_decay_schedule(
-        init_value=1e-6,
-        peak_value=1e-3,
-        warmup_steps=50 * n_batches,
-        decay_steps=450 * n_batches,
-    )
 
     optimizer = optax.chain(
-        optax.additive_weight_decay(1e-5),
+        optax.additive_weight_decay(1e-12),
         optax.clip(1.0),
-        scheduler,
+        optax.adam(1e-5),
     )
 
     from flax.training.train_state import TrainState

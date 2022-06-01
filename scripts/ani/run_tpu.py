@@ -109,7 +109,7 @@ def run():
         optax.additive_weight_decay(1e-12),
         optax.clip(1.0),
         optax.zero_nans(),
-        optax.adam(scheduler),
+        optax.adam(1e-5),
     )
 
     from flax.training.train_state import TrainState
