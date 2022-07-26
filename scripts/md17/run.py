@@ -40,7 +40,7 @@ def run(data_name):
     model = sake.models.DenseSAKEModel(
         hidden_features=64,
         out_features=1,
-        depth=8,
+        depth=6,
     )
 
     @jax.jit
@@ -113,7 +113,7 @@ def run(data_name):
     )
 
     optimizer = optax.chain(
-        optax.additive_weight_decay(1e-12),
+        optax.additive_weight_decay(1e-5),
         optax.clip(1.0),
         optax.adam(learning_rate=scheduler),
     )

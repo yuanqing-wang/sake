@@ -39,7 +39,7 @@ def run(data_name):
     model = sake.models.DenseSAKEModel(
         hidden_features=64,
         out_features=1,
-        depth=8,
+        depth=6,
     )
 
     @jax.jit
@@ -72,8 +72,18 @@ def run(data_name):
     e_te_hat = jax.lax.map(_get_e_pred, x_te)
     f_te_hat = jax.lax.map(_get_f_pred, x_te)
 
-    print("validation", sake.utils.bootstrap_mae(f_vl_hat, f_vl), sake.utils.bootstrap_mae(e_vl_hat, e_vl))
-    print("test", sake.utils.bootstrap_mae(f_te_hat, f_te), sake.utils.bootstrap_mae(e_te_hat, e_te))
+    # print("validation", sake.utils.bootstrap_mae(f_vl_hat, f_vl), sake.utils.bootstrap_mae(e_vl_hat, e_vl))
+    # print("test", sake.utils.bootstrap_mae(f_te_hat, f_te), sake.utils.bootstrap_mae(e_te_hat, e_te))
+    #
+    origin, low, high = sake.utils.bootstrap_mae(f_te_hat, f_te)
+    origin, low, high = 43.364 * origin, 43.364 * low, 43.364 * high
+    print("force, $%.2f_{%.2f}^{%.2f}$" % (origin, low, high))
+
+
+    origin, low, high = sake.utils.bootstrap_mae(e_te_hat, e_te)
+    origin, low, high = 43.364 * origin, 43.364 * low, 43.364 * high
+    print("energy, $%.2f_{%.2f}^{%.2f}$" % (origin, low, high))
+
 
 if __name__ == "__main__":
     import sys
