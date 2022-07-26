@@ -10,6 +10,10 @@ class DenseSAKEModel(nn.Module):
     depth: int = 4
     activation: Callable=nn.silu
     update: Union[List[bool], bool]=True
+    use_semantic_attention: bool = True
+    use_euclidean_attention: bool = True
+    use_spatial_attention: bool = True
+
 
     def setup(self):
         self.embedding_in = nn.Dense(self.hidden_features)
@@ -34,6 +38,9 @@ class DenseSAKEModel(nn.Module):
                     hidden_features=self.hidden_features,
                     out_features=self.hidden_features,
                     update=update[idx],
+                    use_semantic_attention=self.use_semantic_attention,
+                    use_euclidean_attention=self.use_euclidean_attention,
+                    use_spatial_attention=self.use_spatial_attention,
                 ),
             )
 
