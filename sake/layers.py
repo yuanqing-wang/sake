@@ -15,7 +15,7 @@ class ContinuousFilterConvolutionWithConcatenation(nn.Module):
     activation : Callable = jax.nn.silu
 
     def setup(self):
-        self.kernel = ExpNormalSmearing()
+        self.kernel = ExpNormalSmearing(num_rbf=self.kernel_features)
         self.mlp_in = nn.Dense(self.kernel_features)
         self.mlp_out = nn.Sequential(
             [
