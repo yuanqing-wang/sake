@@ -45,6 +45,9 @@ class DenseSAKELayer(nn.Module):
     activation : Callable = jax.nn.silu
     n_heads : int = 4
     update: bool=True
+    use_semantic_attention: bool = True
+    use_euclidean_attention: bool = True
+    use_spatial_attention: bool = True
 
     def setup(self):
         self.edge_model = ContinuousFilterConvolutionWithConcatenation(self.hidden_features)
@@ -69,12 +72,13 @@ class DenseSAKELayer(nn.Module):
                 ],
             )
 
-        self.semantic_attention_mlp = nn.Sequential(
-            [
-                nn.Dense(self.n_heads),
-                partial(nn.leaky_relu, negative_slope=0.2),
-            ],
-        )
+        if self.use_semantic_attention:
+            self.semantic_attention_mlp = nn.Sequential(
+                [
+                    nn.Dense(self.n_heads),
+                    partial(nn.leaky_relu, negative_slope=0.2),
+                ],
+            )
 
         self.post_norm_mlp = nn.Sequential(
             [
@@ -175,6 +179,12 @@ class DenseSAKELayer(nn.Module):
     def combined_attention(self, x_minus_xt_norm, h_e_mtx, mask=None):
         euclidean_attention = self.euclidean_attention(x_minus_xt_norm, mask=mask)
         semantic_attention = self.semantic_attention(h_e_mtx, mask=mask)
+
+        if not self.use_semantic_attention:
+            semantic_attention = jnp.ones_like(semantic_attention)
+        if not self.use_euclidean_attention:
+            euclidean_attention = jnp.ones_like(euclidean_attention)
+
         combined_attention = euclidean_attention * semantic_attention
         if mask is not None:
             combined_attention = combined_attention - 1e5 * (1 - jnp.expand_dims(mask, -1))
@@ -204,6 +214,10 @@ class DenseSAKELayer(nn.Module):
         h_e_att = jnp.reshape(h_e_att, h_e_att.shape[:-2] + (-1, ))
         h_combinations, delta_v = self.spatial_attention(h_e_att, x_minus_xt, x_minus_xt_norm, mask=mask)
 
+        if not self.use_spatial_attention:
+            h_combinations = jnp.zeros_like(h_combinations)
+            delta_v = jnp.zeros_like(delta_v)
+
         # h_e_mtx = (h_e_mtx.unsqueeze(-1) * combined_attention.unsqueeze(-2)).flatten(-2, -1)
         h_e = self.aggregate(h_e_att, mask=mask)
         h = self.node_model(h, h_e, h_combinations)
@@ -224,5 +238,5 @@ class DenseSAKELayer(nn.Module):
 
             v = delta_v + v
             x = x + v
-        
+
         return h, x, v
