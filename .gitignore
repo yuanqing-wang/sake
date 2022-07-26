@@ -129,5 +129,5 @@ dmypy.json
 .pyre/
 
 # data
-.npz
+*.npz
 *checkpoint*
