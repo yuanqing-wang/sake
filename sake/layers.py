@@ -72,13 +72,12 @@ class DenseSAKELayer(nn.Module):
                 ],
             )
 
-        if self.use_semantic_attention:
-            self.semantic_attention_mlp = nn.Sequential(
-                [
-                    nn.Dense(self.n_heads),
-                    partial(nn.leaky_relu, negative_slope=0.2),
-                ],
-            )
+        self.semantic_attention_mlp = nn.Sequential(
+            [
+                nn.Dense(self.n_heads),
+                partial(nn.leaky_relu, negative_slope=0.2),
+            ],
+        )
 
         self.post_norm_mlp = nn.Sequential(
             [
