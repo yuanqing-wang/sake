@@ -239,3 +239,76 @@ class DenseSAKELayer(nn.Module):
             x = x + v
 
         return h, x, v
+
+class EquivariantGraphConvolutionalLayer(nn.Module):
+    out_features : int
+    hidden_features : int
+    activation : Callable = jax.nn.silu
+
+    def setup(self):
+        self.node_mlp = nn.Sequential(
+            [
+                nn.Dense(self.hidden_features),
+                self.activation,
+                nn.Dense(self.out_features),
+                self.activation,
+            ]
+        )
+
+        self.scaling_mlp = nn.Sequential(
+            [
+                nn.Dense(self.hidden_features),
+                self.activation,
+                nn.Dense(1, use_bias=False),
+            ],
+        )
+
+        self.shifting_mlp = nn.Sequential(
+            [
+                nn.Dense(self.hidden_features),
+                self.activation,
+                nn.Dense(1, use_bias=False),
+            ],
+        )
+
+
+    def aggregate(self, h_e_mtx, mask=None):
+        # h_e_mtx = self.mask_self(h_e_mtx)
+        if mask is not None:
+            h_e_mtx = h_e_mtx * jnp.expand_dims(mask, -1)
+        h_e = h_e_mtx.sum(axis=-2)
+        return h_e
+
+    def node_model(self, h, h_e):
+        out = jnp.concatenate([
+                h,
+                h_e,
+            ],
+            axis=-1)
+        out = self.node_mlp(out)
+        out = h + out
+        return out
+
+    def velocity_model(self, v, h):
+        v = self.velocity_mlp(h) * v
+        return v
+
+    def __call__(
+            self,
+            h,
+            x,
+            v=None,
+            mask=None,
+        ):
+
+        x_minus_xt = get_x_minus_xt(x)
+        x_minus_xt_norm = get_x_minus_xt_norm(x_minus_xt=x_minus_xt)
+        h_cat_ht = get_h_cat_ht(h)
+        h_e_mtx = jnp.concatenate([h_cat_ht, x_minus_xt_norm])
+        h_e = self.aggregate(h_e_mtx, mask=mask)
+        shift = self.shifting_mlp(h_e_mtx).sum(-2)
+        scale = self.scaling_mlp(h)
+        v = v * scale + shift
+        x = x + v
+        h = self.node_model(h, h_e)
+        return h, x, v
