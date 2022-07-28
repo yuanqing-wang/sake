@@ -2,7 +2,11 @@ import jax
 import jax.numpy as jnp
 from flax import linen as nn
 from typing import Callable, Union, List
-from .layers import DenseSAKELayer, EquivariantGraphConvolutionalLayer
+from .layers import (
+    DenseSAKELayer,
+    EquivariantGraphConvolutionalLayer,
+    EquivariantGraphConvolutionalLayerWithSmearing,
+)
 
 class DenseSAKEModel(nn.Module):
     hidden_features: int
@@ -60,6 +64,7 @@ class EquivariantGraphNeuralNetwork(nn.Module):
     depth: int = 4
     activation: Callable=nn.silu
     update: Union[List[bool], bool]=True
+    smear: bool = False
 
     def setup(self):
         self.embedding_in = nn.Dense(self.hidden_features)
@@ -71,12 +76,17 @@ class EquivariantGraphNeuralNetwork(nn.Module):
             ],
         )
 
+        if self.smear:
+            layer = EquivariantGraphConvolutionalLayerWithSmearing
+        else:
+            layer = EquivariantGraphConvolutionalLayer
+
 
         for idx in range(self.depth):
             setattr(
                 self,
                 "d%s" % idx,
-                EquivariantGraphConvolutionalLayer(
+                layer(
                     hidden_features=self.hidden_features,
                     out_features=self.hidden_features,
                     activation=self.activation,
