@@ -244,6 +244,7 @@ class EquivariantGraphConvolutionalLayer(nn.Module):
     out_features : int
     hidden_features : int
     activation : Callable = jax.nn.silu
+    update : bool = False
 
     def setup(self):
         self.node_mlp = nn.Sequential(
@@ -304,11 +305,13 @@ class EquivariantGraphConvolutionalLayer(nn.Module):
         x_minus_xt = get_x_minus_xt(x)
         x_minus_xt_norm = get_x_minus_xt_norm(x_minus_xt=x_minus_xt)
         h_cat_ht = get_h_cat_ht(h)
-        h_e_mtx = jnp.concatenate([h_cat_ht, x_minus_xt_norm])
+        h_e_mtx = jnp.concatenate([h_cat_ht, x_minus_xt_norm], axis=-1)
         h_e = self.aggregate(h_e_mtx, mask=mask)
         shift = self.shifting_mlp(h_e_mtx).sum(-2)
         scale = self.scaling_mlp(h)
-        v = v * scale + shift
-        x = x + v
+
+        if self.update:
+            v = v * scale + shift
+            x = x + v
         h = self.node_model(h, h_e)
         return h, x, v

@@ -79,7 +79,8 @@ class EquivariantGraphNeuralNetwork(nn.Module):
                 EquivariantGraphConvolutionalLayer(
                     hidden_features=self.hidden_features,
                     out_features=self.hidden_features,
-                    activation=self.activation
+                    activation=self.activation,
+                    update=self.update,
                 ),
             )
 
@@ -87,6 +88,8 @@ class EquivariantGraphNeuralNetwork(nn.Module):
 
     def __call__(self, h, x, v=None, mask=None):
         h = self.embedding_in(h)
+        if v is None:
+            v = jnp.zeros_like(x)
         for layer in self.layers:
             h, x, v = layer(h, x, v, mask=mask)
         h = self.embedding_out(h)
