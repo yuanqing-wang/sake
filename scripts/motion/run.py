@@ -30,11 +30,27 @@ def run():
         update=True,
     )
 
-    def loss(state, x):
-        _, x1_hat, __ = state.apply(h_tr, x0_tr)
-
-
     params = model.init(jax.random.PRNGKey(2666), h_tr, x0_tr)
+
+    def loss(state):
+        _, x1_hat, __ = model.apply(params, h_tr, x0_tr)
+        loss = ((x1_hat - x1_tr) ** 2).mean()
+        return loss
+
+    @jax.jit
+    def step(state):
+        grads = jax.grad(loss)(state)
+        state = state.apply_gradients(grads=grads)
+        return state
+
+    @jax.jit
+    def eval(state):
+        _, x1_hat_vl, __ = state.apply(params, h_vl, x0_vl)
+        _, x1_hat_te, __ = state.apply(params, h_te, x0_te)
+        error_vl = jnp.mean(jnp.abs(x1_hat_vl, x1_vl))
+        error_te = jnp.mean(jnp.abs(x1_hat_te, x1_te))
+        return error_vl, error_te
+
     optimizer = optax.chain(
         optax.additive_weight_decay(1e-10),
         optax.adam(learning_rate=0.0005),
@@ -46,7 +62,10 @@ def run():
         apply_fn=model.apply, params=params, tx=optimizer,
     )
 
-
+    for _ in range(100):
+        state = step(state)
+        error_vl, error_te = eval(state)
+        print(error_vl, error_te)
 
 
 if __name__ == "__main__":
