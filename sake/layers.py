@@ -245,6 +245,7 @@ class EquivariantGraphConvolutionalLayer(nn.Module):
     hidden_features : int
     activation : Callable = jax.nn.silu
     update : bool = False
+    sigmoid : bool = False
 
     def setup(self):
         self.node_mlp = nn.Sequential(
@@ -272,11 +273,21 @@ class EquivariantGraphConvolutionalLayer(nn.Module):
             ],
         )
 
+        if self.sigmoid:
+            self.edge_model = nn.Sequential(
+                [
+                    nn.Dense(1, use_bias=False),
+                    jax.nn.sidmoid,
+                ],
+            )
 
     def aggregate(self, h_e_mtx, mask=None):
         # h_e_mtx = self.mask_self(h_e_mtx)
         if mask is not None:
             h_e_mtx = h_e_mtx * jnp.expand_dims(mask, -1)
+        if self.sigmoid:
+            h_e_weights = self.edge_model(h_e_mtx)
+            h_e_mtx = h_e_weights * h_e_mtx
         h_e = h_e_mtx.sum(axis=-2)
         return h_e
 

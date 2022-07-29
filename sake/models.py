@@ -65,6 +65,7 @@ class EquivariantGraphNeuralNetwork(nn.Module):
     activation: Callable=nn.silu
     update: Union[List[bool], bool]=True
     smear: bool = False
+    sigmoid: bool = False
 
     def setup(self):
         self.embedding_in = nn.Dense(self.hidden_features)
@@ -91,6 +92,7 @@ class EquivariantGraphNeuralNetwork(nn.Module):
                     out_features=self.hidden_features,
                     activation=self.activation,
                     update=self.update,
+                    sigmoid=self.sigmoid
                 ),
             )
 
