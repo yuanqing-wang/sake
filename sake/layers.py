@@ -75,7 +75,7 @@ class DenseSAKELayer(nn.Module):
         self.semantic_attention_mlp = nn.Sequential(
             [
                 nn.Dense(self.n_heads),
-                partial(nn.leaky_relu, negative_slope=0.2),
+                partial(nn.celu, alpha=2.0),
             ],
         )
 
@@ -92,11 +92,14 @@ class DenseSAKELayer(nn.Module):
         self.x_mixing = nn.Dense(self.n_coefficients, use_bias=False)
 
         log_gamma = -jnp.log(jnp.linspace(1.0, 5.0, self.n_heads))
-        self.log_gamma = self.param(
-            "log_gamma",
-            nn.initializers.constant(log_gamma),
-            log_gamma.shape,
-        )
+        if self.use_semantic_attention and self.use_euclidean_attention:
+            self.log_gamma = self.param(
+                "log_gamma",
+                nn.initializers.constant(log_gamma),
+                log_gamma.shape,
+            )
+        else:
+            self.log_gamma = jnp.ones(self.n_heads)
 
     def spatial_attention(self, h_e_mtx, x_minus_xt, x_minus_xt_norm, mask=None):
         # (batch_size, n, n, n_coefficients)
@@ -277,7 +280,7 @@ class EquivariantGraphConvolutionalLayer(nn.Module):
             self.edge_model = nn.Sequential(
                 [
                     nn.Dense(1, use_bias=False),
-                    jax.nn.sidmoid,
+                    jax.nn.sigmoid,
                 ],
             )
 
@@ -333,6 +336,7 @@ class EquivariantGraphConvolutionalLayerWithSmearing(nn.Module):
     hidden_features : int
     activation : Callable = jax.nn.silu
     update : bool = False
+    sigmoid: bool = True
 
     def setup(self):
         self.edge_model = ContinuousFilterConvolutionWithConcatenation(self.hidden_features)
@@ -362,11 +366,23 @@ class EquivariantGraphConvolutionalLayerWithSmearing(nn.Module):
             ],
         )
 
+        if self.sigmoid:
+            self.edge_att = nn.Sequential(
+                [
+                    nn.Dense(1, use_bias=False),
+                    jax.nn.sigmoid,
+                ],
+            )
+
+
 
     def aggregate(self, h_e_mtx, mask=None):
         # h_e_mtx = self.mask_self(h_e_mtx)
         if mask is not None:
             h_e_mtx = h_e_mtx * jnp.expand_dims(mask, -1)
+        if self.sigmoid:
+            h_e_weights = self.edge_att(h_e_mtx)
+            h_e_mtx = h_e_weights * h_e_mtx
         h_e = h_e_mtx.sum(axis=-2)
         return h_e
 
