@@ -50,6 +50,7 @@ class DenseSAKEModel(nn.Module):
 class RigidDocking(nn.Module):
     hidden_features: int
     out_features: int
+    number_of_keypoints: int = 3
 
     def setup(self):
         self.sake_model = DenseSAKEModel(self.hidden_features, self.out_features, update=False)
@@ -60,9 +61,7 @@ class RigidDocking(nn.Module):
             )
         )
 
-        self.fc_origin = nn.Dense(1, use_bias=False)
-        self.fc_x = nn.Dense(1, use_bias=False)
-        self.fc_y = nn.Dense(1, use_bias=False)
+        self.fc_keypoints = nn.Dense(self.number_of_keypoints, use_bias=False)
 
     def match(self, h0, x0, h1, x1):
         h0 = self.sake_model.embedding_in(h0)
@@ -89,33 +88,30 @@ class RigidDocking(nn.Module):
 
         return h0, x0, h1, x1
 
-    def anchor(self, h, x):
-        origin, x_axis, y_axis = self.fc_origin(h), self.fc_x(h), self.fc_y(h)
-        origin = origin * x
-        x_axis = x_axis * x
-        y_axis = y_axis * x
-        x_axis = x_axis - origin
-        y_axis = y_axis - origin
-        return origin, x_axis, y_axis
+    def keypoint(self, h0, x0, h1, x1):
+        combination0 = self.fc_keypoints(h0)
+        combination1 = self.fc_keypoints(h1)
+        y0 = (jnp.expand_dims(x0, -2) * jnp.expand_dims(combination0, -1)).mean(-3)
+        y1 = (jnp.expand_dims(x1, -2) * jnp.expand_dims(combination1, -1)).mean(-3)
+        return y0, y1
 
     @staticmethod
-    def change_of_coordinates_matrix(x_axis, y_axis):
-        x_axis = x_axis / jnp.linalg.norm(x_axis, axis=-1, keepdims=True)
-        y_axis = y_axis / jnp.linalg.norm(y_axis, axis=-1, keepdims=True)
-        z_axis = jnp.cross(x_axis, y_axis)
-        p_inv = jnp.stack([x_axis, y_axis, z_axis], -2)
-        p = jnp.linalg.inv(p_inv)
-        return p
-
-    def transform(self, h, x):
-        origin, x_axis, y_axis = self.anchor(h, x)
-        p = self.change_of_coordinates_matrix(x_axis, y_axis)
-        x = x - origin
-        x = x @ p
-        return x
+    def kabsch(y1, y2):
+        y1_bar = y1 - y1.mean(-2, keepdims=True)
+        y2_bar = y2 - y2.mean(-2, keepdims=True)
+        a = y2 @ y1.transpose()
+        u2, s, u1 = jnp.linalg.svd(a)
+        d = jnp.sign(jnp.det(u2 @ u1.transpose()))
+        s = jnp.eye(3).at[2, 2].set(d)
+        r = u2 @ s @ u1.transpose()
+        t = y2.mean(-2, keepdims=True) - r * y1.mean(-2, keepdims=True)
+        return r, t
 
     def __call__(self, h0, x0, h1, x1):
         h0, x0, h1, x1 = self.match(h0, x0, h1, x1)
-        x0 = self.transform(h0, x0)
-        x1 = self.transform(h1, x1)
-        return x0, x1
+        y0, y1 = self.keypoint(h0, x0, h1, x1)
+        r, t = self.kabsch(y0, y1)
+        y0 = y0 @ r + t
+        return y0, y1
+
+    
