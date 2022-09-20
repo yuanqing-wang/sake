@@ -15,7 +15,6 @@ class ExpNormalSmearing(nn.Module):
         self.alpha = 5.0 / (self.cutoff_upper - self.cutoff_lower)
         means, betas = self._initial_params()
         self.out_features = self.num_rbf
-
         self.means = self.param(
             "means",
             nn.initializers.constant(means),
