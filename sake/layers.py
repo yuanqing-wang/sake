@@ -89,7 +89,7 @@ class DenseSAKELayer(nn.Module):
         )
 
         self.v_mixing = nn.Dense(1, use_bias=False)
-        self.x_mixing = nn.Dense(self.n_coefficients, use_bias=False)
+        self.x_mixing = nn.Sequential([nn.Dense(self.n_coefficients, use_bias=False), jnp.tanh])
 
         log_gamma = -jnp.log(jnp.linspace(1.0, 5.0, self.n_heads))
         if self.use_semantic_attention and self.use_euclidean_attention:
@@ -100,6 +100,7 @@ class DenseSAKELayer(nn.Module):
             )
         else:
             self.log_gamma = jnp.ones(self.n_heads)
+
 
     def spatial_attention(self, h_e_mtx, x_minus_xt, x_minus_xt_norm, mask=None):
         # (batch_size, n, n, n_coefficients)
@@ -116,15 +117,16 @@ class DenseSAKELayer(nn.Module):
         if mask is not None:
             _mask = jnp.expand_dims(jnp.expand_dims(mask, -1), -1)
             combinations = combinations * _mask
-            combinations_sum = combinations.sum(axis=-3) / (_mask.sum(axis=-3) + 1e-10)
+            combinations_sum = combinations.sum(axis=-3) / (_mask.sum(axis=-3) + 1e-8)
 
         else:
             # (batch_size, n, n, coefficients)
             combinations_sum = combinations.mean(axis=-3)
 
-        combinations_norm = (combinations_sum ** 2).sum(-1)# .pow(0.5)
+        combinations_norm = (combinations_sum ** 2).sum(-1).pow(0.5)
 
         h_combinations = self.post_norm_mlp(combinations_norm)
+        # h_combinations = self.norm(h_combinations)
         return h_combinations, combinations
 
     def aggregate(self, h_e_mtx, mask=None):
@@ -156,7 +158,7 @@ class DenseSAKELayer(nn.Module):
             _x_minus_xt_norm = _x_minus_xt_norm + 1e5 * (1- jnp.expand_dims(mask, -1))
 
         att = jax.nn.softmax(
-            -_x_minus_xt_norm * jnp.exp(self.log_gamma),
+            -_x_minus_xt_norm * jax.nn.softplus(self.log_gamma),
             axis=-2,
         )
         return att
@@ -204,13 +206,12 @@ class DenseSAKELayer(nn.Module):
             v=None,
             mask=None,
         ):
-
+        
         x_minus_xt = get_x_minus_xt(x)
         x_minus_xt_norm = get_x_minus_xt_norm(x_minus_xt=x_minus_xt)
         h_cat_ht = get_h_cat_ht(h)
 
         h_e_mtx = self.edge_model(h_cat_ht, x_minus_xt_norm)
-
         euclidean_attention, semantic_attention, combined_attention = self.combined_attention(x_minus_xt_norm, h_e_mtx, mask=mask)
         h_e_att = jnp.expand_dims(h_e_mtx, -1) * jnp.expand_dims(combined_attention, -2)
         h_e_att = jnp.reshape(h_e_att, h_e_att.shape[:-2] + (-1, ))
@@ -231,7 +232,7 @@ class DenseSAKELayer(nn.Module):
             else:
                 delta_v = self.v_mixing(delta_v.swapaxes(-1, -2)).swapaxes(-1, -2).mean(axis=(-2, -3))
 
-            delta_v = jnp.tanh(delta_v)
+            # delta_v = jnp.tanh(delta_v)
 
             if v is not None:
                 v = self.velocity_model(v, h)
@@ -240,6 +241,7 @@ class DenseSAKELayer(nn.Module):
 
             v = delta_v + v
             x = x + v
+        
 
         return h, x, v
 

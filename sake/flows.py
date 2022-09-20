@@ -86,7 +86,7 @@ class ODEFlow(object):
     def call(model, params, x, key):
         trace0 = jnp.zeros(shape=x.shape[:-2])
         fn = ODEFlow.dynamics_and_trace(model, params, key)
-        y, logdet = odeint(fn, (x, trace0), T)
+        y, logdet = odeint(fn, (x, trace0), T, rtol=1e-2, atol=1e-2)
         y, logdet = y[-1], logdet[-1]
         return y, logdet
 
