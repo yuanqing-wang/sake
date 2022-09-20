@@ -123,7 +123,7 @@ class DenseSAKELayer(nn.Module):
             # (batch_size, n, n, coefficients)
             combinations_sum = combinations.mean(axis=-3)
 
-        combinations_norm = (combinations_sum ** 2).sum(-1).pow(0.5)
+        combinations_norm = (combinations_sum ** 2).sum(-1)# .pow(0.5)
 
         h_combinations = self.post_norm_mlp(combinations_norm)
         # h_combinations = self.norm(h_combinations)

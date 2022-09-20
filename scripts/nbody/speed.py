@@ -13,9 +13,14 @@ def run():
     v_vl = jnp.load("vel_valid_charged5_initvel1.npy")
     v_te = jnp.load("vel_test_charged5_initvel1.npy")
 
-    x = x_tr[:100]
-    q = q_tr[:100]
-    v = v_tr[:100]
+    x = x_tr.reshape((30, 100, *x_tr.shape[1:])) 
+    q = q_tr.reshape((30, 100, *q_tr.shape[1:]))
+    v = v_tr.reshape((30, 100, *v_tr.shape[1:]))
+    
+    
+    # x = x_tr[:100]
+    # q = q_tr[:100]
+    # v = v_tr[:100]
 
     q = jnp.expand_dims(q, -3)
     q = jnp.repeat(q, x.shape[-3], -3)
@@ -32,24 +37,25 @@ def run():
         update=True,
     )
 
-    params = model.init(jax.random.PRNGKey(2666), h, x, v)
+    params = model.init(jax.random.PRNGKey(2666), h[0], x[0], v[0])
 
     @jax.jit
     def forward(h, x, v):
-        h, x, v = model.apply(params, h, x, v)
-        return h, x, v
+        for idx in range(30):
+            _h, _x, _v = h[idx], x[idx], v[idx]
+            _h, _x, _v = model.apply(params, _h, _x, _v)
+        return _x
 
-    for _ in range(5):
+    for _ in range(1):
         jax.block_until_ready(forward(h, x, v))
-
 
     import time
     time0 = time.time()
-    for _ in range(10):
+    for _ in range(1):
         jax.block_until_ready(forward(h, x, v))
     time1 = time.time()
 
-    print(0.1 * (time1 - time0))
+    print((time1 - time0) / (30 * 1))
 
 if __name__ == "__main__":
     run()

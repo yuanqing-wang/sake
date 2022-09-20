@@ -36,11 +36,10 @@ def run(data_name):
     coloring = partial(coloring, mean=e_tr.mean(), std=e_tr.std())
     e_tr_mean = e_tr.mean().item()
 
-    model = sake.models.DenseSAKEModel(
+    model = sake.models.EquivariantGraphNeuralNetwork(
         hidden_features=64,
         out_features=1,
         depth=6,
-        update=False,
     )
 
     @jax.jit
