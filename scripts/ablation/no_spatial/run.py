@@ -41,7 +41,8 @@ def run(data_name):
         hidden_features=64,
         out_features=1,
         depth=6,
-        use_semantic_attention=False,
+        use_spatial_attention=False,
+        update=False,
     )
 
     @jax.jit

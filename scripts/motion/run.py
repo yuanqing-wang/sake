@@ -32,23 +32,24 @@ def run():
 
     params = model.init(jax.random.PRNGKey(2666), h_tr, x0_tr)
 
-    def loss(state):
+
+    def loss(params):
         _, x1_hat, __ = model.apply(params, h_tr, x0_tr)
         loss = ((x1_hat - x1_tr) ** 2).mean()
         return loss
 
-    @jax.jit
+    # @jax.jit
     def step(state):
-        grads = jax.grad(loss)(state)
+        grads = jax.grad(loss)(state.params)
         state = state.apply_gradients(grads=grads)
         return state
 
     @jax.jit
     def eval(state):
-        _, x1_hat_vl, __ = state.apply(params, h_vl, x0_vl)
-        _, x1_hat_te, __ = state.apply(params, h_te, x0_te)
-        error_vl = jnp.mean(jnp.abs(x1_hat_vl, x1_vl))
-        error_te = jnp.mean(jnp.abs(x1_hat_te, x1_te))
+        _, x1_hat_vl, __ = model.apply(state.params, h_vl, x0_vl)
+        _, x1_hat_te, __ = model.apply(state.params, h_te, x0_te)
+        error_vl = jnp.mean(jnp.abs(x1_hat_vl - x1_vl))
+        error_te = jnp.mean(jnp.abs(x1_hat_te - x1_te))
         return error_vl, error_te
 
     optimizer = optax.chain(
@@ -62,11 +63,12 @@ def run():
         apply_fn=model.apply, params=params, tx=optimizer,
     )
 
-    for _ in range(100):
+    for idx_epoch in range(10000):
         state = step(state)
-        error_vl, error_te = eval(state)
-        print(error_vl, error_te)
 
+        if idx_epoch % 100 == 0:
+            error_vl, error_te = eval(state)
+            print(error_vl, error_te, flush=True)
 
 if __name__ == "__main__":
     run()

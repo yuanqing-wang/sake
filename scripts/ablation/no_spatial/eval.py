@@ -41,7 +41,9 @@ def run(data_name):
         out_features=1,
         depth=6,
         use_spatial_attention=False,
+        update=False,
     )
+
 
     @jax.jit
     def get_e_pred(params, x):
