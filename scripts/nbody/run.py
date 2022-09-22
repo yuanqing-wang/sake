@@ -33,9 +33,9 @@ def run(args):
     h_te, x0_te, x1_te, v_te = preprocess(q_te, x_te, v_te)
 
     model = sake.models.DenseSAKEModel(
-        hidden_features=64,
+        hidden_features=args.hidden_features,
         out_features=1,
-        depth=4,
+        depth=args.depth,
         n_heads=args.n_heads,
         update=True,
     )
@@ -89,11 +89,10 @@ def run(args):
     losses_te = []
 
     key = jax.random.PRNGKey(2666)
-    for _ in range(2000):
+    for _ in range(5000):
         key, subkey = jax.random.split(key)
         state = epoch(state, subkey)
         loss_vl, loss_te = eval(state)
-        print(loss_vl, flush=True)
         losses_vl.append(loss_vl.item())
         losses_te.append(loss_te.item())
 
@@ -107,8 +106,10 @@ def run(args):
 if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser()
+    parser.add_argument("--hidden_features", type=int, default=64)
     parser.add_argument("--learning_rate", type=float, default=5e-4)
     parser.add_argument("--weight_decay", type=float, default=1e-6)
-    parser.add_argument("--n_heads", type=float, default=4)
+    parser.add_argument("--n_heads", type=int, default=4)
+    parser.add_argument("--depth", type=int, default=4)
     args = parser.parse_args()
     run(args)
