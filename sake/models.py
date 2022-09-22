@@ -17,7 +17,7 @@ class DenseSAKEModel(nn.Module):
     use_semantic_attention: bool = True
     use_euclidean_attention: bool = True
     use_spatial_attention: bool = True
-
+    n_heads: int=4
 
     def setup(self):
         self.embedding_in = nn.Dense(self.hidden_features)
@@ -45,6 +45,7 @@ class DenseSAKEModel(nn.Module):
                     use_semantic_attention=self.use_semantic_attention,
                     use_euclidean_attention=self.use_euclidean_attention,
                     use_spatial_attention=self.use_spatial_attention,
+                    n_heads=self.n_heads,
                 ),
             )
 

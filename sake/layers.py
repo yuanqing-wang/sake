@@ -55,6 +55,7 @@ class DenseSAKELayer(nn.Module):
 
         self.node_mlp = nn.Sequential(
             [
+                nn.LayerNorm(),
                 nn.Dense(self.hidden_features),
                 self.activation,
                 nn.Dense(self.out_features),
@@ -65,6 +66,7 @@ class DenseSAKELayer(nn.Module):
         if self.update:
             self.velocity_mlp = nn.Sequential(
                 [
+                    nn.LayerNorm(),
                     nn.Dense(self.hidden_features),
                     self.activation,
                     nn.Dense(1, use_bias=False),
@@ -74,6 +76,7 @@ class DenseSAKELayer(nn.Module):
 
         self.semantic_attention_mlp = nn.Sequential(
             [
+                nn.LayerNorm(),
                 nn.Dense(self.n_heads),
                 partial(nn.celu, alpha=2.0),
             ],
@@ -158,7 +161,7 @@ class DenseSAKELayer(nn.Module):
             _x_minus_xt_norm = _x_minus_xt_norm + 1e5 * (1- jnp.expand_dims(mask, -1))
 
         att = jax.nn.softmax(
-            -_x_minus_xt_norm * jax.nn.softplus(self.log_gamma),
+            -_x_minus_xt_norm * jnp.exp(self.log_gamma),
             axis=-2,
         )
         return att
@@ -232,7 +235,6 @@ class DenseSAKELayer(nn.Module):
             else:
                 delta_v = self.v_mixing(delta_v.swapaxes(-1, -2)).swapaxes(-1, -2).mean(axis=(-2, -3))
 
-            # delta_v = jnp.tanh(delta_v)
 
             if v is not None:
                 v = self.velocity_model(v, h)
