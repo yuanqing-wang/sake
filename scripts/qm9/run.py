@@ -11,6 +11,12 @@ def run(target):
     i_tr, i_vl, i_te = ds_tr["charges"], ds_vl["charges"], ds_te["charges"]
     x_tr, x_vl, x_te = ds_tr["positions"], ds_vl["positions"], ds_te["positions"]
     y_tr, y_vl, y_te = ds_tr[target], ds_vl[target], ds_te[target]
+    
+    if target + "_thermo" in ds_tr:
+        y_tr = y_tr - ds_tr[target + "_thermo"]
+        y_vl = y_vl - ds_vl[target + "_thermo"]
+        y_te = y_te - ds_te[target + "_thermo"]
+
     y_tr, y_vl, y_te = onp.expand_dims(y_tr, -1), onp.expand_dims(y_vl, -1), onp.expand_dims(y_te, -1)
     m_tr, m_vl, m_te = (i_tr > 0), (i_vl > 0), (i_te > 0)
 
@@ -35,18 +41,21 @@ def run(target):
     from functools import partial
     coloring = partial(coloring, mean=y_tr.mean(), std=y_tr.std())
 
-    print(y_tr.mean(), y_tr.std())
+    print(y_tr.mean(), y_tr.std(), N_BATCHES)
 
     class Model(nn.Module):
         def setup(self):
             self.model = sake.models.DenseSAKEModel(
                 hidden_features=64,
                 out_features=64,
-                depth=8,
+                depth=6,
+                update=[False, False, False, True, True, True],
             )
 
             self.mlp = nn.Sequential(
                 [
+                    nn.Dense(64),
+                    nn.silu,
                     nn.Dense(64),
                     nn.silu,
                     nn.Dense(1),
@@ -72,6 +81,7 @@ def run(target):
         loss = jnp.abs(y - y_hat).mean()
         return loss
 
+    @jax.jit
     def step(state, i, x, m, y):
         params = state.params
         grads = jax.grad(loss_fn)(params, i, x, m, y)
@@ -85,33 +95,27 @@ def run(target):
         state = state.apply_gradients(grads=grads)
         return loss, state
     
-    @jax.jit
+    # @jax.jit
     def epoch(state, i_tr, x_tr, m_tr, y_tr):
         key = jax.random.PRNGKey(state.step)
         idxs = jax.random.permutation(key, jnp.arange(BATCH_SIZE * N_BATCHES))
-        i_tr = i_tr[:BATCH_SIZE * N_BATCHES].reshape(N_BATCHES, BATCH_SIZE, *i_tr.shape[1:])
-        x_tr = x_tr[:BATCH_SIZE * N_BATCHES].reshape(N_BATCHES, BATCH_SIZE, *x_tr.shape[1:])
-        m_tr = m_tr[:BATCH_SIZE * N_BATCHES].reshape(N_BATCHES, BATCH_SIZE, *m_tr.shape[1:])
-        y_tr = y_tr[:BATCH_SIZE * N_BATCHES].reshape(N_BATCHES, BATCH_SIZE, 1)
+        _i_tr = i_tr[idxs][:BATCH_SIZE * N_BATCHES].reshape(N_BATCHES, BATCH_SIZE, *i_tr.shape[1:])
+        _x_tr = x_tr[idxs][:BATCH_SIZE * N_BATCHES].reshape(N_BATCHES, BATCH_SIZE, *x_tr.shape[1:])
+        _m_tr = m_tr[idxs][:BATCH_SIZE * N_BATCHES].reshape(N_BATCHES, BATCH_SIZE, *m_tr.shape[1:])
+        _y_tr = y_tr[idxs][:BATCH_SIZE * N_BATCHES].reshape(N_BATCHES, BATCH_SIZE, 1)
 
         def loop_body(idx_batch, state):
-            i = i_tr[idx_batch]
-            x = x_tr[idx_batch]
-            m = m_tr[idx_batch]
-            y = y_tr[idx_batch]
+            i = _i_tr[idx_batch]
+            x = _x_tr[idx_batch]
+            m = _m_tr[idx_batch]
+            y = _y_tr[idx_batch]
             state = step(state, i, x, m, y)
             return state
 
-        state = jax.lax.fori_loop(0, N_BATCHES, loop_body, state)
+        for idx_batch in range(N_BATCHES):
+            state = loop_body(idx_batch, state)
         return state
 
-    @partial(jax.jit, static_argnums=(5))
-    def many_epochs(state, i_tr, x_tr, m_tr, y_tr, n=10):
-        def loop_body(idx_batch, state):
-            state = epoch(state, i_tr, x_tr, m_tr, y_tr)
-            return state
-        state = jax.lax.fori_loop(0, n, loop_body, state)
-        return state
 
     key = jax.random.PRNGKey(2666)
     i0 = i_tr[:BATCH_SIZE]
@@ -122,24 +126,28 @@ def run(target):
     params = model.init(key, i0, x0, m0)
     scheduler = optax.warmup_cosine_decay_schedule(
         init_value=1e-6,
-        peak_value=1e-3,
-        warmup_steps=50 * N_BATCHES,
-        decay_steps=450 * N_BATCHES,
+        peak_value=5e-4,
+        warmup_steps=100 * N_BATCHES,
+        decay_steps=1900 * N_BATCHES,
     )
 
     optimizer = optax.chain(
-        optax.additive_weight_decay(1e-12),
+        optax.additive_weight_decay(1e-16),
         optax.clip(1.0),
         optax.adam(learning_rate=scheduler),
     )
 
     from flax.training.train_state import TrainState
-    from flax.training.checkpoints import save_checkpoint
+    from flax.training.checkpoints import save_checkpoint, restore_checkpoint
     state = TrainState.create(
         apply_fn=model.apply, params=params, tx=optimizer,
     )
 
-    for idx_batch in tqdm.tqdm(range(500)):
+
+    state = restore_checkpoint("_" + target, target=state)
+    idx_step = int(state.step / N_BATCHES)
+
+    for idx_batch in tqdm.tqdm(range(idx_step, 2000)):
         state = epoch(state, i_tr, x_tr, m_tr, y_tr)
         save_checkpoint("_" + target, target=state, step=idx_batch)
 

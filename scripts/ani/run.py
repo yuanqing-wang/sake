@@ -3,7 +3,7 @@ import jax.numpy as jnp
 import numpy as onp
 
 class Collater(object):
-    def __init__(self, ds_tr, batch_size=128):
+    def __init__(self, ds_tr, batch_size=64):
         self.ds_tr = self._move_to_device(ds_tr)
         self.batch_size = batch_size
         self.pointers = []
@@ -67,11 +67,12 @@ def run():
         hidden_features=64,
         out_features=1,
         depth=6,
+        update=[False, False, False, False, True, True],
     )
 
     from functools import partial
     mean, std = collater.get_statistics()
-    coloring = sake.utils.coloring(mean=mean, std=std)
+    coloring = partial(sake.utils.coloring, mean=mean, std=std)
 
     def get_y_pred(params, i, x):
         y_pred, _, __ = model.apply(params, i, x)

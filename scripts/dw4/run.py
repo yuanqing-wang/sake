@@ -75,7 +75,7 @@ def run():
     )
 
     import tqdm
-    for idx_batch in tqdm.tqdm(range(500)):
+    for idx_batch in tqdm.tqdm(range(5000)):
         key, subkey = jax.random.split(key)
         state = step(state, subkey)
         if idx_batch % 10 == 0:

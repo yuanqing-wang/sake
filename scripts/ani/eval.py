@@ -21,7 +21,9 @@ def run():
         hidden_features=64,
         out_features=1,
         depth=6,
+        update=[False, False, False, False, True, True],
     )
+
 
     def get_y_pred(params, i, x):
         y_pred, _, __ = model.apply(params, i, x)
@@ -36,8 +38,9 @@ def run():
 
     from flax.training.checkpoints import restore_checkpoint
     state = restore_checkpoint("_checkpoint", None)
-    from flax.jax_utils import unreplicate
-    params = unreplicate(state['params'])
+    params = state["params"]
+    # from flax.jax_utils import unreplicate
+    # params = unreplicate(state['params'])
 
     from tqdm import tqdm
     count = 0
