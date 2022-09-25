@@ -21,7 +21,7 @@ def run():
         hidden_features=64,
         out_features=1,
         depth=6,
-        update=[False, False, False, False, True, True],
+        # update=[False, False, False, False, True, True],
     )
 
 
@@ -33,14 +33,14 @@ def run():
 
     def get_loss(params, i, x, y):
         y_pred = get_y_pred(params,i, x)
-        loss = jnp.abs(y_pred - y).sum()
+        loss = jnp.abs(y_pred - y).mean()
         return loss
 
     from flax.training.checkpoints import restore_checkpoint
     state = restore_checkpoint("_checkpoint", None)
     params = state["params"]
-    # from flax.jax_utils import unreplicate
-    # params = unreplicate(state['params'])
+    from flax.jax_utils import unreplicate
+    params = unreplicate(state['params'])
 
     from tqdm import tqdm
     count = 0
