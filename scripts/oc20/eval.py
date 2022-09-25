@@ -64,10 +64,11 @@ def run(args):
 
     from flax.training.train_state import TrainState
     from flax.training.checkpoints import save_checkpoint, restore_checkpoint
-    state = restore_checkpoint("_checkpoint", None)
+    state = restore_checkpoint("__checkpoint", None)
     params = state['params']
 
     for x, y, i in data:
+        i = jax.nn.one_hot(i, i_max)
         loss = loss_fn(params, i, x, y)
         print(loss)
 

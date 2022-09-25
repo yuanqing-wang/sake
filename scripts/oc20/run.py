@@ -8,7 +8,7 @@ import tqdm
 import random
 
 def run(args):
-    data = onp.load("is2re10k.npy", allow_pickle=True)
+    data = onp.load("is2re_all.npy", allow_pickle=True)
     y_tr = jnp.array([_data[1] for _data in data]) 
     i_max = max([max(_data[2]) for _data in data]) + 1
     data = [[jnp.array(_data[0]), jnp.array(_data[1]), jnp.array(_data[2])] for _data in data]

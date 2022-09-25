@@ -3,7 +3,7 @@ import pickle
 import numpy as np
 
 def run():
-    path = "is2res_train_val_test_lmdbs/data/is2re/10k/train/data.lmdb"
+    path = "is2res_train_val_test_lmdbs/data/is2re/all/train/data.lmdb"
     env = lmdb.open(
         path,
         subdir=False,
@@ -25,7 +25,7 @@ def run():
 
         data.append(_data)
 
-    np.save("is2re10k.npy", data)
+    np.save("is2re_all.npy", data)
 
 if __name__ == "__main__":
     run()
