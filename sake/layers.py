@@ -55,7 +55,7 @@ class DenseSAKELayer(nn.Module):
 
         self.node_mlp = nn.Sequential(
             [
-                nn.LayerNorm(),
+                # nn.LayerNorm(),
                 nn.Dense(self.hidden_features),
                 self.activation,
                 nn.Dense(self.out_features),
@@ -66,7 +66,6 @@ class DenseSAKELayer(nn.Module):
         if self.update:
             self.velocity_mlp = nn.Sequential(
                 [
-                    nn.LayerNorm(),
                     nn.Dense(self.hidden_features),
                     self.activation,
                     nn.Dense(1, use_bias=False),
@@ -76,7 +75,6 @@ class DenseSAKELayer(nn.Module):
 
         self.semantic_attention_mlp = nn.Sequential(
             [
-                nn.LayerNorm(),
                 nn.Dense(self.n_heads),
                 partial(nn.celu, alpha=2.0),
             ],
@@ -208,11 +206,15 @@ class DenseSAKELayer(nn.Module):
             x,
             v=None,
             mask=None,
+            he=None,
         ):
         
         x_minus_xt = get_x_minus_xt(x)
         x_minus_xt_norm = get_x_minus_xt_norm(x_minus_xt=x_minus_xt)
         h_cat_ht = get_h_cat_ht(h)
+
+        if he is not None:
+            h_cat_ht = jnp.concatenate([h_cat_ht, he], -1)
 
         h_e_mtx = self.edge_model(h_cat_ht, x_minus_xt_norm)
         euclidean_attention, semantic_attention, combined_attention = self.combined_attention(x_minus_xt_norm, h_e_mtx, mask=mask)

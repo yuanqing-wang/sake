@@ -51,10 +51,10 @@ class DenseSAKEModel(nn.Module):
 
         self.layers = [getattr(self, "d%s" % idx) for idx in range(self.depth)]
 
-    def __call__(self, h, x, v=None, mask=None):
+    def __call__(self, h, x, v=None, mask=None, he=None):
         h = self.embedding_in(h)
         for layer in self.layers:
-            h, x, v = layer(h, x, v, mask=mask)
+            h, x, v = layer(h, x, v, mask=mask, he=he)
         h = self.embedding_out(h)
         return h, x, v
 
@@ -99,11 +99,11 @@ class EquivariantGraphNeuralNetwork(nn.Module):
 
         self.layers = [getattr(self, "d%s" % idx) for idx in range(self.depth)]
 
-    def __call__(self, h, x, v=None, mask=None):
+    def __call__(self, h, x, v=None, mask=None, he=None):
         h = self.embedding_in(h)
         if v is None:
             v = jnp.zeros_like(x)
         for layer in self.layers:
-            h, x, v = layer(h, x, v, mask=mask)
+            h, x, v = layer(h, x, v, mask=mask, he=he)
         h = self.embedding_out(h)
         return h, x, v
