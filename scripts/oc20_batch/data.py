@@ -20,7 +20,8 @@ def run():
         x = _data["pos"].numpy()
         y = _data["y_relaxed"]
         i = _data["atomic_numbers"].numpy()
-        i = np.repeat(np.expand_dims(i, 0), x.shape[0], 0)
+
+        print(x.shape, i.shape)
         length = x.shape[0]
         if length in data:
             data[length]['i'].append(i)
@@ -34,7 +35,7 @@ def run():
         data[length]['x'] = np.stack(data[length]['x'])
         data[length]['y'] = np.stack(data[length]['y'])
 
-    np.save("is2re_all.npy", data)
+    # np.save("is2re_all.npy", data)
 
 if __name__ == "__main__":
     run()
