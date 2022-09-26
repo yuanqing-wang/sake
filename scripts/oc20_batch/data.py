@@ -21,7 +21,7 @@ def run():
         y = _data["y_relaxed"]
         i = _data["atomic_numbers"].numpy()
         i = np.repeat(np.expand_dims(i, 0), x.shape[0], 0)
-        length = x.shape[1]
+        length = x.shape[0]
         if length in data:
             data[length]['i'].append(i)
             data[length]['x'].append(x)
@@ -30,9 +30,11 @@ def run():
             data[length] = {'i': [i], 'x': [x], 'y': [y]}
 
     for length in data:
-        data[length] = np.array(data[length])
+        data[length]['i'] = np.stack(data[length]['i'])
+        data[length]['x'] = np.stack(data[length]['x'])
+        data[length]['y'] = np.stack(data[length]['y'])
 
-    np.save("is2re10k.npy", data)
+    np.save("is2re_all.npy", data)
 
 if __name__ == "__main__":
     run()

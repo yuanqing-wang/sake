@@ -103,7 +103,7 @@ def run(args):
         return state
 
     key = jax.random.PRNGKey(2666)
-    x0, _, i0 = next(iter(data))
+    x0, _, i0 = next(iter(collater))
     i0 = jax.nn.one_hot(i0, i_max)
     params = model.init(key, i0, x0)
 
