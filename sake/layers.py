@@ -48,6 +48,7 @@ class DenseSAKELayer(nn.Module):
     use_semantic_attention: bool = True
     use_euclidean_attention: bool = True
     use_spatial_attention: bool = True
+    cutoff: None
 
     def setup(self):
         self.edge_model = ContinuousFilterConvolutionWithConcatenation(self.hidden_features)
@@ -194,6 +195,12 @@ class DenseSAKELayer(nn.Module):
         if mask is not None:
             combined_attention = combined_attention - 1e5 * (1 - jnp.expand_dims(mask, -1))
         combined_attention = jax.nn.softmax(combined_attention, axis=-2)
+
+        if self.cutoff is not None:
+            cutoff = self.cutoff(x_minus_xt_norm)
+            combined_attention = combined_attention * cutoff
+            combined_attention = combined_attention / combined_attention.sum(axis=-2, keepdims=True)
+        
         return euclidean_attention, semantic_attention, combined_attention
 
     def velocity_model(self, v, h):
@@ -208,7 +215,7 @@ class DenseSAKELayer(nn.Module):
             mask=None,
             he=None,
         ):
-        
+
         x_minus_xt = get_x_minus_xt(x)
         x_minus_xt_norm = get_x_minus_xt_norm(x_minus_xt=x_minus_xt)
         h_cat_ht = get_h_cat_ht(h)
@@ -245,7 +252,7 @@ class DenseSAKELayer(nn.Module):
 
             v = delta_v + v
             x = x + v
-        
+
 
         return h, x, v
 
