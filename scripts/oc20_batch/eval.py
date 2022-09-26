@@ -43,7 +43,7 @@ class Collater(object):
     def get_from_pointer(self, pointer):
         length, idxs = pointer
         return (
-                jax.nn.one_hot(self.ds_tr[length]['i'][idxs], 4),
+                self.ds_tr[length]['i'][idxs],
                 jnp.array(self.ds_tr[length]['x'][idxs]),
                 jnp.expand_dims(jnp.array(self.ds_tr[length]['y'][idxs]), -1),
         )

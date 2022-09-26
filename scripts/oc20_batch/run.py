@@ -7,11 +7,10 @@ import sake
 import tqdm
 import random
 
-
-BATCH_SIZE = 4
+BATCH_SIZE = 128
 
 class Collater(object):
-    def __init__(self, ds_tr, batch_size=BATCH_SIZE, n_devices=8):
+    def __init__(self, ds_tr, batch_size=BATCH_SIZE, n_devices=1):
         self.ds_tr = ds_tr # self._move_to_device(ds_tr)
         self.batch_size = batch_size
         self.pointers = []
@@ -49,7 +48,7 @@ class Collater(object):
 
     def get_from_pointer(self, pointer):
         length, idxs = pointer
-        i = jax.nn.one_hot(jnp.array(self.ds_tr[length]['i'][idxs]), 4)
+        i = jnp.array(self.ds_tr[length]['i'][idxs])
         x = jnp.array(self.ds_tr[length]['x'][idxs])
         y = jnp.expand_dims(jnp.array(self.ds_tr[length]['y'][idxs]), -1)
 
@@ -77,9 +76,8 @@ def run(args):
     i_max = 0
     counter = 0
     for i, x, y in collater:
-        print(i.shape, x.shape)
         i_max = max(i.max(), i_max)
-        counter += 1
+        print(i_max)
     i_max = i_max + 1
     from sake.utils import coloring
     from functools import partial
@@ -88,12 +86,13 @@ def run(args):
 
     model = sake.models.DenseSAKEModel(
         hidden_features=64,
-        out_features=64,
+        out_features=1,
         depth=6,
     )
 
     def get_y_hat(params, i, x):
         y_hat, _, __ = model.apply(params, i, x)
+        y_hat = y_hat.sum(-2)
         y_hat = coloring(y_hat)
         return y_hat
 
@@ -110,7 +109,7 @@ def run(args):
         return state
 
     key = jax.random.PRNGKey(2666)
-    x0, _, i0 = next(iter(collater))
+    i0, x0, y0 = next(iter(collater))
     i0 = jax.nn.one_hot(i0, i_max)
     print(i0.shape, x0.shape)
     params = model.init(key, i0, x0)
@@ -127,12 +126,12 @@ def run(args):
     state = TrainState.create(
         apply_fn=model.apply, params=params, tx=optimizer,
     )
-    ds_tr = onp.load("ds_tr.npy", allow_pickle=True)[()]
-    collater = Collater(ds_tr)
-
     
     for idx_batch in tqdm.tqdm(range(200)):
         for i, x, y in collater:
+            i = jax.nn.one_hot(i, i_max)
+            y_hat = get_y_hat(state.params, i, x)
+            print(y_hat.shape, y.shape)
             state = step(state, i, x, y)
         assert state.opt_state.notfinite_count <= 10
         save_checkpoint("__checkpoint", target=state, step=idx_batch)

@@ -35,7 +35,7 @@ def run():
         data[length]['x'] = np.stack(data[length]['x'])
         data[length]['y'] = np.stack(data[length]['y'])
 
-    # np.save("is2re_all.npy", data)
+    np.save("is2re_all.npy", data)
 
 if __name__ == "__main__":
     run()
