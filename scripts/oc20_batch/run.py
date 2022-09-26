@@ -8,10 +8,10 @@ import tqdm
 import random
 
 
-BATCH_SIZE = 128
+BATCH_SIZE = 4
 
 class Collater(object):
-    def __init__(self, ds_tr, batch_size=128, n_devices=8):
+    def __init__(self, ds_tr, batch_size=BATCH_SIZE, n_devices=8):
         self.ds_tr = ds_tr # self._move_to_device(ds_tr)
         self.batch_size = batch_size
         self.pointers = []
@@ -74,6 +74,13 @@ def run(args):
     data = onp.load("is2re_all.npy", allow_pickle=True)[()]
     collater = Collater(data)
     print(len(collater))
+    i_max = 0
+    counter = 0
+    for i, x, y in collater:
+        print(i.shape, x.shape)
+        i_max = max(i.max(), i_max)
+        counter += 1
+    i_max = i_max + 1
     from sake.utils import coloring
     from functools import partial
     y_mean, y_std = collater.get_statistics()
@@ -105,6 +112,7 @@ def run(args):
     key = jax.random.PRNGKey(2666)
     x0, _, i0 = next(iter(collater))
     i0 = jax.nn.one_hot(i0, i_max)
+    print(i0.shape, x0.shape)
     params = model.init(key, i0, x0)
 
     optimizer = optax.chain(
