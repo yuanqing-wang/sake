@@ -29,7 +29,10 @@ def run():
         else:
             data[length] = {'i': [i], 'x': [x], 'y': [y]}
 
-    np.save("is2re_all.npy", data)
+    for length in data:
+        data[length] = np.array(data[length])
+
+    np.save("is2re10k.npy", data)
 
 if __name__ == "__main__":
     run()

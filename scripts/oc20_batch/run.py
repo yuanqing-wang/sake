@@ -7,15 +7,77 @@ import sake
 import tqdm
 import random
 
+
+BATCH_SIZE = 128
+
+class Collater(object):
+    def __init__(self, ds_tr, batch_size=128, n_devices=8):
+        self.ds_tr = ds_tr # self._move_to_device(ds_tr)
+        self.batch_size = batch_size
+        self.pointers = []
+        self.n_devices = n_devices
+
+    @staticmethod
+    def _move_to_device(ds_tr):
+        for length in ds_tr:
+            ds_tr[length]['i'] = jnp.array(ds_tr[length]['i'])
+            ds_tr[length]['x'] = jnp.array(ds_tr[length]['x'])
+            ds_tr[length]['y'] = jnp.array(ds_tr[length]['y'])
+        return ds_tr
+
+    def get_statistics(self):
+        ys = jnp.concatenate([self.ds_tr[length]['y'].reshape(-1) for length in self.ds_tr])
+        return ys.mean(), ys.std()
+
+    
+    def __len__(self):
+        return len(self.get_pointers())
+
+    def get_pointers(self):
+        pointers = []
+        for length in self.ds_tr:
+            n_data = self.ds_tr[length]['x'].shape[0]
+            n_batches = int(n_data / (self.batch_size * self.n_devices))
+            idxs = onp.random.permutation(n_data)[:n_batches*self.batch_size*self.n_devices]
+            idxs = idxs.reshape(n_batches, self.batch_size*self.n_devices)
+            for idx in idxs:
+                pointers.append((length, idx))
+        import random
+        random.shuffle(pointers)
+        self.pointers = pointers
+        return pointers
+
+    def get_from_pointer(self, pointer):
+        length, idxs = pointer
+        i = jax.nn.one_hot(jnp.array(self.ds_tr[length]['i'][idxs]), 4)
+        x = jnp.array(self.ds_tr[length]['x'][idxs])
+        y = jnp.expand_dims(jnp.array(self.ds_tr[length]['y'][idxs]), -1)
+
+        i = i.reshape(self.n_devices, self.batch_size, *i.shape[1:])
+        x = x.reshape(self.n_devices, self.batch_size, *x.shape[1:])
+        y = y.reshape(self.n_devices, self.batch_size, *y.shape[1:])
+
+        return i, x, y
+
+    def __iter__(self):
+        self.get_pointers()
+        return self
+
+    def __next__(self):
+        if len(self.pointers) == 0:
+            raise StopIteration
+        else:
+            pointer = self.pointers.pop()
+            return self.get_from_pointer(pointer)
+
 def run(args):
-    data = onp.load("is2re_all.npy", allow_pickle=True)
-    y_tr = jnp.array([_data[1] for _data in data])
-    i_max = max([max(_data[2]) for _data in data]) + 1
-    data = [[jnp.array(_data[0]), jnp.array(_data[1]), jnp.array(_data[2])] for _data in data]
-    random.shuffle(data)
+    data = onp.load("is2re_all.npy", allow_pickle=True)[()]
+    collater = Collater(data)
+    print(len(collater))
     from sake.utils import coloring
     from functools import partial
-    coloring = partial(coloring, mean=y_tr.mean(), std=y_tr.std())
+    y_mean, y_std = collater.get_statistics()
+    coloring = partial(coloring, mean=y_mean, std=y_std)
 
     model = sake.models.DenseSAKEModel(
         hidden_features=64,
