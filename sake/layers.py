@@ -48,7 +48,7 @@ class DenseSAKELayer(nn.Module):
     use_semantic_attention: bool = True
     use_euclidean_attention: bool = True
     use_spatial_attention: bool = True
-    cutoff: None
+    cutoff: Callable = None
 
     def setup(self):
         self.edge_model = ContinuousFilterConvolutionWithConcatenation(self.hidden_features)
