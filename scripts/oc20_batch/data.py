@@ -4,7 +4,7 @@ import numpy as np
 
 def run():
     data = {}
-    path = "is2res_train_val_test_lmdbs/data/is2re/10k/train/data.lmdb"
+    path = "../oc20/is2res_train_val_test_lmdbs/data/is2re/all/train/data.lmdb"
     env = lmdb.open(
         path,
         subdir=False,
@@ -28,6 +28,9 @@ def run():
             data[length]['y'].append(y)
         else:
             data[length] = {'i': [i], 'x': [x], 'y': [y]}
+
+    for length in data:
+        data[length] = np.array(data[length])
 
     np.save("is2re10k.npy", data)
 
