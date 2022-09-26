@@ -142,6 +142,7 @@ def run(args):
         apply_fn=model.apply, params=params, tx=optimizer,
     )
 
+    import flax
     state = flax.jax_utils.replicate(state)
 
     for idx_batch in tqdm.tqdm(range(5000)):
@@ -177,6 +178,6 @@ if __name__ == "__main__":
     parser.add_argument("--target", type=str, default="U")
     parser.add_argument("--learning_rate", type=float, default=5e-4)
     parser.add_argument("--batch_size", type=int, default=32)
-    parser.add_argument("--weight_decay", type=float, default=1e-6)
+    parser.add_argument("--weight_decay", type=float, default=1e-10)
     args = parser.parse_args()
     run(args)
