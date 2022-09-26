@@ -2,9 +2,28 @@ import jax
 import jax.numpy as jnp
 import numpy as onp
 from flax import linen as nn
+import math
 
 def coloring(x, mean, std):
     return std * x + mean
+
+def cosine_cutoff(x, lower=0.0, upper=5.0):
+    cutoffs = 0.5 * (
+        jnp.cos(
+            math.pi
+            * (
+                2
+                * (x - lower)
+                / (upper - lower)
+                + 1.0
+            )
+        )
+        + 1.0
+    )
+    # remove contributions below the cutoff radius
+    x = x * (x < upper)
+    x = x * (x > lower)
+    return cutoffs
 
 class ExpNormalSmearing(nn.Module):
     cutoff_lower: float = 0.0
