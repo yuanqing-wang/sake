@@ -95,8 +95,8 @@ def run(args):
         return state
 
     def epoch(state, i_tr, x_tr, m_tr, y_tr):
-        key = jax.random.PRNGKey(state.step.mean())
-        idxs = jax.random.permutation(key, jnp.arange(BATCH_SIZE * N_BATCHES))
+        key = jax.random.PRNGKey(state.step[0])
+        idxs = jax.random.permutation(key, jnp.arange(BATCH_SIZE * N_BATCHES * N_DEVICES))
         _i_tr = i_tr[idxs][:BATCH_SIZE * N_DEVICES * N_BATCHES].reshape(N_BATCHES, N_DEVICES, BATCH_SIZE, *i_tr.shape[1:])
         _x_tr = x_tr[idxs][:BATCH_SIZE * N_DEVICES * N_BATCHES].reshape(N_BATCHES, N_DEVICES, BATCH_SIZE, *x_tr.shape[1:])
         _m_tr = m_tr[idxs][:BATCH_SIZE * N_DEVICES * N_BATCHES].reshape(N_BATCHES, N_DEVICES, BATCH_SIZE, *m_tr.shape[1:])
