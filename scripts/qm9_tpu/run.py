@@ -24,7 +24,7 @@ def run(args):
     i_tr, i_vl, i_te = ds_tr["charges"], ds_vl["charges"], ds_te["charges"]
     x_tr, x_vl, x_te = ds_tr["positions"], ds_vl["positions"], ds_te["positions"]
     y_tr, y_vl, y_te = ds_tr[target], ds_vl[target], ds_te[target]
-    
+
     if target + "_thermo" in ds_tr:
         y_tr = y_tr - ds_tr[target + "_thermo"]
         y_vl = y_vl - ds_vl[target + "_thermo"]
@@ -48,8 +48,8 @@ def run(args):
     m_tr, m_vl, m_te = make_edge_mask(m_tr), make_edge_mask(m_vl), make_edge_mask(m_te)
 
     BATCH_SIZE = args.batch_size
-    N_BATCHES = len(i_tr) // BATCH_SIZE
     N_DEVICES = 8
+    N_BATCHES = len(i_tr) // (BATCH_SIZE * N_DEVICES)
 
     from sake.utils import coloring
     from functools import partial
@@ -93,7 +93,7 @@ def run(args):
         grads = jax.lax.pmean(grads, "batch")
         state = state.apply_gradients(grads=grads)
         return state
-    
+
     def epoch(state, i_tr, x_tr, m_tr, y_tr):
         key = jax.random.PRNGKey(state.step)
         idxs = jax.random.permutation(key, jnp.arange(BATCH_SIZE * N_BATCHES))
@@ -104,10 +104,10 @@ def run(args):
 
         def loop_body(idx, state):
             i, x, m, y = _i_tr[idx], _x_tr[idx], _m_tr[idx], _y_tr[idx]
-            state = step_with_loss(state, i, x, m, y)
+            state = step(state, i, x, m, y)
             return state
 
-        for i in N_BATCHES: 
+        for i in range(N_BATCHES):
             state = loop_body(i, state)
 
         return state
@@ -147,7 +147,7 @@ def run(args):
 
     for idx_batch in tqdm.tqdm(range(5000)):
         state = epoch(state, i_tr, x_tr, m_tr, y_tr)
-        assert state.opt_state.notfinite_count <= 10
+        assert state.opt_state.notfinite_count.mean() <= 10
         save_checkpoint("_" + args.target, target=state, step=idx_batch, keep_every_n_steps=1)
 
     def _get_y_hat(inputs):
@@ -165,7 +165,7 @@ def run(args):
     y_te_hat = jax.lax.map(_get_y_hat, inputs)
 
     print(y_tr_hat)
-    
+
     print("training", sake.utils.bootstrap_mae(y_tr_hat, y_tr))
     print("validation", sake.utils.bootstrap_mae(y_vl_hat, y_vl))
     print("test", sake.utils.bootstrap_mae(y_te_hat, y_te))
