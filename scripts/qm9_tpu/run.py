@@ -124,7 +124,7 @@ def run(args):
         init_value=0.0,
         peak_value=args.learning_rate,
         warmup_steps=500 * N_BATCHES,
-        decay_steps=5000 * N_BATCHES,
+        decay_steps=2000 * N_BATCHES,
     )
 
     optimizer = optax.chain(
@@ -145,10 +145,10 @@ def run(args):
     import flax
     state = flax.jax_utils.replicate(state)
 
-    for idx_batch in tqdm.tqdm(range(5000)):
+    for idx_batch in tqdm.tqdm(range(2000)):
         state = epoch(state, i_tr, x_tr, m_tr, y_tr)
         assert state.opt_state.notfinite_count.mean() <= 10
-        save_checkpoint("_" + args.target, target=state, step=idx_batch, keep_every_n_steps=1)
+        save_checkpoint("_" + args.target, target=state, step=idx_batch, keep_every_n_steps=10)
 
     def _get_y_hat(inputs):
          x, i = jnp.split(inputs, [3], axis=-1)
