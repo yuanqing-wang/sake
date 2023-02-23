@@ -2,7 +2,7 @@ import jax
 import jax.numpy as jnp
 from flax import linen as nn
 from typing import Callable, Optional
-from .utils import ExpNormalSmearing
+from .utils import ExpNormalSmearing, segment_mean, segment_softmax
 from .functional import get_x_minus_xt, get_x_minus_xt_norm, get_h_cat_ht
 from functools import partial
 
@@ -251,35 +251,6 @@ class DenseSAKELayer(SAKELayer):
 
         return h, x, v
 
-
-def segment_mean(data: jnp.ndarray,
-                 segment_ids: jnp.ndarray,
-                 num_segments: Optional[int] = None,
-                 indices_are_sorted: bool = False,
-                 unique_indices: bool = False):
-  """Returns mean for each segment.
-  Args:
-    data: the values which are averaged segment-wise.
-    segment_ids: indices for the segments.
-    num_segments: total number of segments.
-    indices_are_sorted: whether ``segment_ids`` is known to be sorted.
-    unique_indices: whether ``segment_ids`` is known to be free of duplicates.
-  """
-  nominator = jax.ops.segment_sum(
-      data,
-      segment_ids,
-      num_segments,
-      indices_are_sorted=indices_are_sorted,
-      unique_indices=unique_indices)
-  denominator = jax.ops.segment_sum(
-      jnp.ones_like(data),
-      segment_ids,
-      num_segments,
-      indices_are_sorted=indices_are_sorted,
-      unique_indices=unique_indices)
-  return nominator / jnp.maximum(denominator,
-                                 jnp.ones(shape=[], dtype=denominator.dtype))
-
 class SparseSAKELayer(SAKELayer):
     def spatial_attention(self, h_e_mtx, x_minus_xt, x_minus_xt_norm, idxs):
         # (batch_size, n, n, n_coefficients)
@@ -293,12 +264,10 @@ class SparseSAKELayer(SAKELayer):
         # (batch_size, n, n, coefficients, 3)
         combinations = jnp.expand_dims(x_minus_xt, -2) * jnp.expand_dims(coefficients, -1)
 
-        # (batch_size, n, n, coefficients, 3)
+        # dense shape: (batch_size, n, n, coefficients, 3)
         # dense: combinations_sum = combinations.mean(axis=-3)
-        combinations_sum = segment_mean(
-            combinations.swapaxes(-3, -5),
-            idxs[..., -1],
-        ).swapaxes(-2, -4)
+        # sparse shape: (n_idxs, coefficients, 3)
+        combinations_sum = segment_mean(combinations, idxs[..., -1])
 
         combinations_norm = (combinations_sum ** 2).sum(-1)# .pow(0.5)
 
@@ -306,14 +275,12 @@ class SparseSAKELayer(SAKELayer):
         # h_combinations = self.norm(h_combinations)
         return h_combinations, combinations
 
-    def aggregate(self, h_e_mtx, mask=None):
-        # h_e_mtx = self.mask_self(h_e_mtx)
-        if mask is not None:
-            h_e_mtx = h_e_mtx * jnp.expand_dims(mask, -1)
-        h_e = h_e_mtx.sum(axis=-2)
+    def aggregate(self, h_e_mtx, idxs):
+        # dense: h_e = h_e_mtx.sum(axis=-2)
+        h_e = jax.ops.segment_sum(h_e_mtx, idxs[..., -1])
         return h_e
 
-    def node_model(self, h, h_e, h_combinations):
+    def node_model(self, h, h_e, h_combinations, idxs):
         out = jnp.concatenate([
                 h,
                 h_e,
@@ -324,37 +291,19 @@ class SparseSAKELayer(SAKELayer):
         out = h + out
         return out
 
-    def euclidean_attention(self, x_minus_xt_norm, mask=None):
-        # (batch_size, n, n, 1)
-        _x_minus_xt_norm = x_minus_xt_norm + 1e5 * jnp.expand_dims(jnp.eye(
-            x_minus_xt_norm.shape[-2],
-            x_minus_xt_norm.shape[-2],
-        ), -1)
-
-        if mask is not None:
-            _x_minus_xt_norm = _x_minus_xt_norm + 1e5 * (1- jnp.expand_dims(mask, -1))
-
-        att = jax.nn.softmax(
-            -_x_minus_xt_norm * jnp.exp(self.log_gamma),
-            axis=-2,
-        )
-        return att
-
-    def semantic_attention(self, h_e_mtx, mask=None):
+    def semantic_attention(self, h_e_mtx, idxs):
         # (batch_size, n, n, n_heads)
         att = self.semantic_attention_mlp(h_e_mtx)
 
         # (batch_size, n, n, n_heads)
         # att = att.view(*att.shape[:-1], self.n_heads)
-        att = att - 1e5 * jnp.expand_dims(jnp.eye(
-            att.shape[-2],
-            att.shape[-2],
-        ), -1)
+        # att = att - 1e5 * jnp.expand_dims(jnp.eye(
+        #     att.shape[-2],
+        #     att.shape[-2],
+        # ), -1)
 
-        if mask is not None:
-            att = att - 1e5 * (1 - jnp.expand_dims(mask, -1))
 
-        att = jax.nn.softmax(att, axis=-2)
+        att = segment_softmax(att, idxs[..., -1])
         return att
 
     def combined_attention(self, x_minus_xt_norm, h_e_mtx, mask=None):
@@ -365,8 +314,7 @@ class SparseSAKELayer(SAKELayer):
             euclidean_attention = 1.0
 
         combined_attention = euclidean_attention * semantic_attention
-        if mask is not None:
-            combined_attention = combined_attention - 1e5 * (1 - jnp.expand_dims(mask, -1))
+
         # combined_attention = jax.nn.softmax(combined_attention, axis=-2)
         combined_attention = combined_attention / combined_attention.sum(axis=-2, keepdims=True)
         
