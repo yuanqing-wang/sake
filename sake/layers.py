@@ -3,9 +3,11 @@ import jax.numpy as jnp
 from flax import linen as nn
 from typing import Callable, Optional
 from .utils import ExpNormalSmearing, segment_mean, segment_softmax
-from .functional import get_x_minus_xt, get_x_minus_xt_norm, get_h_cat_ht
+from .functional import (
+    get_x_minus_xt, get_x_minus_xt_norm, get_h_cat_ht,
+    get_x_minus_xt_sparse, get_h_cat_ht_sparse,
+)
 from functools import partial
-
 def double_sigmoid(x):
     return 2.0 * jax.nn.sigmoid(x)
 
@@ -280,7 +282,7 @@ class SparseSAKELayer(SAKELayer):
         h_e = jax.ops.segment_sum(h_e_mtx, idxs[..., -1])
         return h_e
 
-    def node_model(self, h, h_e, h_combinations, idxs):
+    def node_model(self, h, h_e, h_combinations):
         out = jnp.concatenate([
                 h,
                 h_e,
@@ -306,8 +308,8 @@ class SparseSAKELayer(SAKELayer):
         att = segment_softmax(att, idxs[..., -1])
         return att
 
-    def combined_attention(self, x_minus_xt_norm, h_e_mtx, mask=None):
-        semantic_attention = self.semantic_attention(h_e_mtx, mask=mask)
+    def combined_attention(self, x_minus_xt_norm, h_e_mtx):
+        semantic_attention = self.semantic_attention(h_e_mtx)
         if self.cutoff is not None:
             euclidean_attention = self.cutoff(x_minus_xt_norm)
         else:
@@ -329,11 +331,11 @@ class SparseSAKELayer(SAKELayer):
             h,
             x,
             v=None,
-            mask=None,
             he=None,
+            idxs=None,
         ):
 
-        x_minus_xt = get_x_minus_xt(x)
+        x_minus_xt = get_x_minus_xt_sparse(x, idxs)
         x_minus_xt_norm = get_x_minus_xt_norm(x_minus_xt=x_minus_xt)
         h_cat_ht = get_h_cat_ht(h)
 
@@ -341,25 +343,21 @@ class SparseSAKELayer(SAKELayer):
             h_cat_ht = jnp.concatenate([h_cat_ht, he], -1)
 
         h_e_mtx = self.edge_model(h_cat_ht, x_minus_xt_norm)
-        euclidean_attention, semantic_attention, combined_attention = self.combined_attention(x_minus_xt_norm, h_e_mtx, mask=mask)
+        euclidean_attention, semantic_attention, combined_attention = self.combined_attention(x_minus_xt_norm, h_e_mtx)
         h_e_att = jnp.expand_dims(h_e_mtx, -1) * jnp.expand_dims(combined_attention, -2)
         h_e_att = jnp.reshape(h_e_att, h_e_att.shape[:-2] + (-1, ))
-        h_combinations, delta_v = self.spatial_attention(h_e_att, x_minus_xt, x_minus_xt_norm, mask=mask)
+        h_combinations, delta_v = self.spatial_attention(h_e_att, x_minus_xt, x_minus_xt_norm, idxs=idxs)
 
         if not self.use_spatial_attention:
             h_combinations = jnp.zeros_like(h_combinations)
             delta_v = jnp.zeros_like(delta_v)
 
         # h_e_mtx = (h_e_mtx.unsqueeze(-1) * combined_attention.unsqueeze(-2)).flatten(-2, -1)
-        h_e = self.aggregate(h_e_att, mask=mask)
+        h_e = self.aggregate(h_e_att, idxs=idxs)
         h = self.node_model(h, h_e, h_combinations)
 
         if self.update:
-            if mask is not None:
-                delta_v = self.v_mixing(delta_v.swapaxes(-1, -2)).swapaxes(-1, -2).sum(axis=(-2, -3))
-                delta_v = delta_v / (mask.sum(-1, keepdims=True) + 1e-10)
-            else:
-                delta_v = self.v_mixing(delta_v.swapaxes(-1, -2)).swapaxes(-1, -2).mean(axis=(-2, -3))
+            delta_v = self.v_mixing(delta_v.swapaxes(-1, -2)).swapaxes(-1, -2).mean(axis=(-2, -3))
 
 
             if v is not None:
@@ -369,7 +367,6 @@ class SparseSAKELayer(SAKELayer):
 
             v = delta_v + v
             x = x + v
-
 
         return h, x, v
 
