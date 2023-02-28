@@ -269,8 +269,8 @@ class SparseSAKELayer(SAKELayer):
         # dense shape: (batch_size, n, n, coefficients, 3)
         # dense: combinations_sum = combinations.mean(axis=-3)
         # sparse shape: (n_idxs, coefficients, 3)
-        combinations_sum = jax.ops.segment_sum(combinations, idxs[..., 0], num_segments=num_segments)\
-            /(jax.ops.segment_sum(jnp.ones_like(combinations), idxs[..., 0], num_segments=num_segments) + 1)
+        combinations_sum = jax.ops.segment_sum(combinations, idxs[..., 0], num_segments=num_segments)# \
+            # /(jax.ops.segment_sum(jnp.ones_like(combinations), idxs[..., 0], num_segments=num_segments) + 1)
         
         # print("sparse", combinations_sum)
 
@@ -367,8 +367,8 @@ class SparseSAKELayer(SAKELayer):
 
         if self.update:
             delta_v = self.v_mixing(delta_v.swapaxes(-1, -2)).swapaxes(-1, -2).mean(-2)
-            delta_v = jax.ops.segment_sum(delta_v, idxs[..., 0], num_segments=h.shape[-2])\
-            /(jax.ops.segment_sum(jnp.ones_like(delta_v), idxs[..., 0], num_segments=h.shape[-2]) + 1)
+            delta_v = jax.ops.segment_sum(delta_v, idxs[..., 0], num_segments=h.shape[-2])# \
+            # /(jax.ops.segment_sum(jnp.ones_like(delta_v), idxs[..., 0], num_segments=h.shape[-2]) + 1)
 
 
             if v is not None:

@@ -144,8 +144,8 @@ def test_dense_sparse_consistent():
     import jax
     import jax.numpy as jnp
     import sake
-    model_dense = sake.layers.DenseSAKELayer(16, 16)
-    model = sake.layers.SparseSAKELayer(16, 16)
+    model_dense = sake.layers.DenseSAKELayer(16, 16, cutoff=sake.utils.cosine_cutoff)
+    model = sake.layers.SparseSAKELayer(16, 16, cutoff=sake.utils.cosine_cutoff)
     x = jax.random.normal(key=jax.random.PRNGKey(2666), shape=(5, 3))
     h = jax.random.uniform(key=jax.random.PRNGKey(1984), shape=(5, 16))
     init_params = model_dense.init(jax.random.PRNGKey(2046), h, x)
@@ -164,3 +164,5 @@ def test_dense_sparse_consistent():
     assert v.shape == v_dense.shape == (5, 3)
 
     assert jnp.allclose(h, h_dense)
+
+
