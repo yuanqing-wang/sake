@@ -159,3 +159,29 @@ def segment_softmax(logits: jnp.ndarray,
   normalizers = normalizers[segment_ids]
   softmax = logits / normalizers
   return softmax
+
+def batch(idxs, *hs):
+    n_atoms = jnp.array([h.shape[0] for h in hs[0]])
+    offsets = jnp.concatenate([jnp.array([0]), n_atoms]).cumsum()
+    idxs = jnp.concatenate([idx + offset for (idx, offset) in zip(idxs, offsets)])
+    hs = [jnp.concatenate(h) for h in hs]
+    return n_atoms, idxs, *hs
+
+def unbatch(n_atoms, idxs, *hs):
+    offsets = jnp.concatenate([jnp.array([0]), n_atoms]).cumsum()
+    idxs = jnp.split(idxs, n_atoms)
+    idxs = jnp.array([idx - offset for (idx, offset) in zip(idxs, offsets)])
+    hs = [jnp.split(h, n_atoms) for h in hs]
+    return idxs, *hs
+    
+def batch_and_pad(idxs, *hs, max_n_atoms=None, max_n_edges=None):
+    n_atoms = jnp.sum([h.shape[0] for h in hs[0]])
+    n_edges = jnp.sum([idx.shape[0] for idx in idxs])
+    delta_n_atoms = max_n_atoms - n_atoms
+    delta_n_edges = max_n_edges - n_edges
+    delta_idxs = jnp.zeros((delta_n_edges, 2))
+    delta_hs = [jnp.zeros((delta_n_atoms, *h.shape[1:])) for h in hs]
+    return batch(idxs+delta_idxs, *[h + delta_h for (h, delta_h) in zip(hs, delta_hs)])
+
+
+
