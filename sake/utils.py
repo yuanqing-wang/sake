@@ -3,6 +3,7 @@ import jax.numpy as jnp
 import numpy as onp
 from flax import linen as nn
 import math
+from typing import Optional
 
 def coloring(x, mean, std):
     return std * x + mean

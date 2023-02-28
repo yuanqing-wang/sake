@@ -8,7 +8,7 @@ def get_x_minus_xt(x):
     return jnp.expand_dims(x, -3) - jnp.expand_dims(x, -2)
 
 def get_x_minus_xt_sparse(x, idxs):
-    return x[idxs[..., 0]] - x[idxs[..., 1]]
+    return x[idxs[..., 1]] - x[idxs[..., 0]]
 
 def get_x_minus_xt_norm(
     x_minus_xt,
@@ -43,11 +43,12 @@ def get_h_cat_ht(h):
         ],
         axis=-1,
     )
+    return h_cat_ht
 
 def get_h_cat_ht_sparse(h, idxs):
     h_cat_ht = jnp.concatenate(
         [
-            h[idxs[..., 0]], h[idxs[..., 1]],
+            h[idxs[..., 1]], h[idxs[..., 0]],
         ],
         axis=-1
     )
