@@ -183,5 +183,6 @@ def batch_and_pad(idxs, *hs, max_n_atoms=None, max_n_edges=None):
     delta_hs = [jnp.zeros((delta_n_atoms, *h.shape[1:])) for h in hs]
     return batch(idxs+delta_idxs, *[h + delta_h for (h, delta_h) in zip(hs, delta_hs)])
 
+    
 
 
