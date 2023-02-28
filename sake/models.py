@@ -8,7 +8,7 @@ from .layers import (
     EquivariantGraphConvolutionalLayerWithSmearing,
 )
 
-class DenseSAKEModel(nn.Module):
+class SAKEModel(nn.Module):
     hidden_features: int
     out_features: int
     depth: int = 4
@@ -53,10 +53,20 @@ class DenseSAKEModel(nn.Module):
 
         self.layers = [getattr(self, "d%s" % idx) for idx in range(self.depth)]
 
+
+class DenseSAKEModel(SAKEModel):
     def __call__(self, h, x, v=None, mask=None, he=None):
         h = self.embedding_in(h)
         for layer in self.layers:
             h, x, v = layer(h, x, v, mask=mask, he=he)
+        h = self.embedding_out(h)
+        return h, x, v
+    
+class SparseSAKEModel(SAKEModel):
+    def __call__(self, h, x, v=None, idxs=None):
+        h = self.embedding_in(h)
+        for layer in self.layers:
+            h, x, v = layer(h, x, v, idxs=idxs)
         h = self.embedding_out(h)
         return h, x, v
 
