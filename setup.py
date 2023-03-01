@@ -23,7 +23,7 @@ INSTALL_REQUIRES = open("requirements.txt", "r").readlines()
 
 setup(
     # Self-descriptive entries which should always be present
-    name="sake",
+    name="sake-gnn",
     author="Yuanqing Wang",
     author_email="wangyq@wangyq.net",
     description=short_description[0],
